@@ -74,3 +74,30 @@ Stories in order: US-01, US-05, US-07, US-12, US-13, US-16, US-23, US-10, US-18,
 | S-09a | Action failed, nothing moved | US-21 |
 | S-10 | Sandbox purchase, hands off to PayPal | US-23 |
 | S-11 | About the sandbox and what a real launch needs | US-04 |
+
+## Tokens (P4)
+In `app/globals.css`. Black page over `public/assets/bg.mp4` with a flat 80% dark layer on app pages (the hero keeps the sample's gradient). Text white, soft `#d0d0d0`, muted `#9a9a9a`. Pills `#28282a`, white nav pill, white glowing primary button. Panels `rgba(18,18,20,.9)` with a 16% white line. One accent, `#f4c7d4` (from the logo), used only for what was rewritten or is new. Fonts: Bubbledot for headings (Geist Pixel fallback), Inter for text. Motion: sample 01's reveal, header slide and button pulse, plus a rise on page and new chapters. Reduced motion stops all of it and pauses the video.
+
+## Routes and screens (P4)
+| Screen | Where |
+| --- | --- |
+| S-01 | `/` |
+| S-02, S-02c | `/story` (new chapter appears after a purchase or a sent payment) |
+| S-02a, S-02b | `/story?state=syncing`, `?state=offline`, and `?state=empty` (prototype links at the bottom of the page, removed in P6) |
+| S-03, S-04, S-04a | evidence sheet on `/story`: tap a sentence, "That's not right", then a question if no person is named |
+| S-05 | "Here's what changed" panel on `/story` after a correction |
+| S-06 | `/memory` |
+| S-07, S-07a, S-07b | `/chat` (ask about flights for the no-evidence reply) |
+| S-08, S-09, S-09a | `/action/confirm`, `/action/done`, `/action/failed` (failure through the prototype link on the confirm page) |
+| S-10 | `/buy`, a short hand-off, then back to `/story` |
+| S-11 | `/about` |
+
+Mock data comes from BFF routes under `app/api/*`, backed by `lib/mock.ts` (in memory, resets with "Reset demo").
+
+## Image list (P4)
+No screen needs a new picture. Every screen uses the background video, the logo, and Font Awesome icons (coffee, bus, basket, carrot, signal, paper plane). Nothing is blank or dropped. Ask if you want photos or illustrations on any page.
+
+## Review log (P4b, Nov 2)
+design-critic verdict: FAIL on the first pass. Fixed and rechecked in Chrome at desktop width:
+- Fixed: the page entrance animation trapped the sheet, toast and chat box inside the page column. Pink now marks only what changed or is new (rewritten sentence, changed stats, "Updated" memory row), not "Not sure" or the failure icon. After a correction the rewritten chapter comes first, with the diff folded into one line. Headline no longer repeats the first sentence. Prototype state links moved to About. The success page redirects if nothing was sent, and names the recipient. The loading skeleton matches the page layout. "Use again" stays at full strength. Chat placeholder and starter wording tidied.
+- Not changed, your call: the three overlapping icons and the four-stat band on the welcome page come straight from reference 01 (rule 21). The critic calls the icons a "trusted by" pattern. The inner pages share one template (eyebrow, pixel title, lead, rows), so only the font carries the identity there. Not rechecked at 375px after the fixes except in an iframe.
