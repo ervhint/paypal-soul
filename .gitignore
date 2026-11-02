@@ -1,0 +1,7 @@
+.env*
+HACKATHON-WORKFLOW-V*.md
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+DESIGN-REFERENCE-0*.md
