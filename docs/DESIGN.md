@@ -1,26 +1,52 @@
 # DESIGN
 
 - FigJam (stories, page flow): https://www.figma.com/board/4MmmM8pMStHjAejPvQj856
-- Figma design file: https://www.figma.com/design/EeWaUIKSULuHzVq9atOZla (page `P3 Style tiles`)
+- Figma style tiles (made under workflow V9, replaced by the code samples under V10): https://www.figma.com/design/EeWaUIKSULuHzVq9atOZla
 
-## Design references (direction only, no brand or asset copied)
-- `DESIGN-REFERENCE-01.md`: black page, dot-matrix headline, pill nav, soft glow button, counted stats, video background.
-- `DESIGN-REFERENCE-02.md`: grainy pastel panel that changes colour, huge tight grotesk, glossy icon, cream strip with curved notch.
-- `DESIGN-REFERENCE-03.md`: sky-cyan bowl glow, navy on white, letter-by-letter reveal, dark split panel, dot that grows into an arrow.
+## Reference checklists (P3a)
+Routes: `/samples/01`, `/samples/02`, `/samples/03`. Status after the browser check is in the G3 section below.
 
-## Research (P3b, Nov 2)
-Based on public text pages only. No real product screens were seen, and the Perplexity citation point is from memory.
-- [Copilot Money](https://www.copilot.money/): adopt "never acts without your approval" (US-19). Adapt explaining a single charge, opening on the evidence and not a fresh chat (US-07, US-16). Avoid its dashboard-and-list framing (US-05, US-06).
-- [Perplexity](https://www.perplexity.ai/hub/blog/introducing-perplexity-deep-research): adopt numbered citations on chat claims (US-16). Avoid citing many sources to look rigorous. Say plainly when no payments match (US-17).
-- [NotebookLM](https://support.google.com/notebooklm/answer/14276468): adapt answers grounded only in the given sources (US-07, US-17). No precedent found for a visible belief view (US-14).
-- [Readwise Reader](https://readwise.io/read), taste: adopt the quiet reading page with evidence on tap (US-06, US-07). Adapt inline assistance for corrections (US-12, US-13). Avoid keyboard triage that hides confirmation (US-19, US-21).
+**01, from `DESIGN-REFERENCE-01.md`**
+- Assets: CloudFront background video, Font Awesome 6.5.2, `logo.webp` (not supplied), Geist Pixel Circle.
+- Fonts: Inter 400/500/600, BubbledotICG-FinePos, Geist Pixel fallback.
+- Colors: the 11 variables in the spec.
+- Layout: one viewport with header (logo, white nav pill, dark sign-in), hero (trust row, two-line headline, subhead, glowing CTA), four stats.
+- Motion: header slide-down, per-line headline fade, shared blur reveal, CTA pulse, stat count-up, hovers, reduced motion.
+- Breakpoints: 720 (burger, overlay, sheet menu, 2-column stats), 420, height 700.
 
-## Directions for G3
-- A. Receipt Light: Doto + Hanken Grotesk. The story is set in dot matrix, like a till slip.
-- B. Weather: Bricolage Grotesque + Newsreader. Each chapter has a colour, and a correction changes it.
-- C. Coming Into Focus: Instrument Serif + Instrument Sans. Unconfirmed beliefs are blurred and sharpen when confirmed.
+**02, from `DESIGN-REFERENCE-02.md`**
+- Assets: four webp icons on CloudFront.
+- Fonts: Inter Tight 400/500.
+- Colors: ink, cream, four gradient sets with glows, four tints.
+- Layout: 1440x960 unit scale, hero panel 75%, nav, cycling headline, store-style buttons with caption, strip with S-curve notch, scroll hint, three stats, sprout.
+- Motion: one clock, 1.75s slots, word enter and leave, icon pop and float, panel crossfade, gradient drift, first button fill in slot four, hidden tab pause, reduced motion still.
+- Breakpoints: 760. Effects: SVG grain, grey icon with masked colour tint.
 
-Tile amounts and dates are illustrative, not real sandbox values.
+**03, from `DESIGN-REFERENCE-03.md`**
+- Assets: ship photo through images.higgs.ai, inline SVG marks.
+- Fonts: Inter Tight 400/500/600, Georgia for one wordmark.
+- Colors: tokens and canvas colours in the spec.
+- Layout: fixed pill nav, hero with headline, trust line, CTA and 4x2 grid, pinned statement, dark split.
+- Motion: canvas bowl glow with scroll table and intro, letter reveal (load and scroll), statement rise, nav CTA pop, dot-to-arrow hover, ship zoom, row fade.
+- Breakpoints: 820, no sideways scroll at 390.
+
+## Research for app pages (P3c, Nov 2)
+Only a Copilot Money marketing mockup was seen as a screen. ChatGPT is from help text, and Perplexity showed only its question box. US-13, US-17 and US-21 have no precedent here, so they are designed from scratch.
+- [Copilot Money](https://www.copilot.money/): adopt one proposed change in plain words with a quiet Dismiss beside a clear Approve (US-12, US-19). Adapt its "To review" queue for uncertain beliefs (US-14). Avoid one-tap approval without recipient and amount (US-19).
+- [ChatGPT memory](https://help.openai.com/en/articles/8590148-memory-in-chatgpt): adopt edit, correct a part, and stop using this (US-14). Adapt a sources list under each reply (US-07, US-16). Avoid hiding beliefs or being vague about what a control does (US-14).
+- [Perplexity](https://www.perplexity.ai/hub/blog/introducing-perplexity-deep-research): adapt one-line labels for chat actions (US-16), a small point.
+
+## Chosen direction (G3)
+Sample 01, with Bubbledot and a strong dark fade over the video (added for headline contrast, not in the reference). Bubbledot's license is unconfirmed and it loads from OnlineWebFonts: check before shipping, with Geist Pixel as the fallback.
+
+## Sample notes (G3)
+Payment numbers in the samples are illustrative, not real sandbox values.
+
+Content changed from the references (P3b):
+- 01: Soul copy and stats. Brand logos became coffee, bus and basket icons, and "Trusted by" became "Soul noticed this today". The background video is now a project copy at `public/assets/bg.mp4`, which the user says is free to use. The logo is the user's `public/assets/logo.webp`. It is pale pink, so its circle is `#28282a` instead of the spec's white.
+- 02: words are Ask, Notice, Correct, Explore. Store buttons became Read My Story and See It Change with line icons. Icons, panel colours and motion are unchanged.
+- 03: Soul copy. The partner wordmarks became everyday payments and PayPal pieces. The ship photo stays and does not fit the product, so it needs a decision.
+- 03 on phones: cells with no icon keep their text, because the spec would leave them empty.
 
 ## Golden path
 S-01 → S-02 → S-03 → S-04 → S-05 → S-07 → S-07a → S-10 → PayPal checkout → S-02c → S-08 → S-09
