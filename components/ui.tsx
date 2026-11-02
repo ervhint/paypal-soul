@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Payment } from "@/lib/mock";
+import { titleCase } from "@/lib/title-case";
 
 export const money = (n: number) => `$${n.toFixed(2)}`;
 
@@ -72,10 +73,11 @@ export const PaymentRow = ({ p }: { p: Payment }) => (
       <i className={`fa-solid fa-${p.icon}`} aria-hidden="true" />
     </span>
     <span className="pay-main">
-      <b>{p.item}</b>
+      <b>{titleCase(p.item)}</b>
       <small>
-        {p.date} · sandbox {p.id}
+        {p.date} · {titleCase(p.payee)} · {p.category}
       </small>
+      <small>PayPal ID {p.txn}</small>
     </span>
     <span className="pay-amt">{money(p.amount)}</span>
   </li>

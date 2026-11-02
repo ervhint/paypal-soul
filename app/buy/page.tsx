@@ -10,35 +10,28 @@ export default function BuyPage() {
 
   const go = async () => {
     setGoing(true);
-    await new Promise((r) => setTimeout(r, 1400)); // P6: redirect to PayPal sandbox checkout, return URL comes back here
-    await post("/api/purchase");
-    router.push("/story");
+    const r = await post("/api/action", { kind: "buy" }); // P6: creates a PayPal sandbox order and returns its link
+    const j = await r.json();
+    router.push(r.ok ? `/action/status?id=${j.id}` : "/action/failed");
   };
 
   return (
     <div className="wrap narrow">
-      <p className="eyebrow">Sandbox purchase</p>
-      <h1 className="display" style={{ marginTop: 12, fontSize: "clamp(32px, 4.6vw, 54px)" }}>Buy something small</h1>
+      <p className="eyebrow">Sandbox Purchase</p>
+      <h1 className="display" style={{ marginTop: 12, fontSize: "clamp(32px, 4.6vw, 54px)" }}>Buy Something Small</h1>
       <p className="lead">Make a payment in PayPal&rsquo;s sandbox and watch Soul write a new chapter about it.</p>
 
       <ul className="deal">
-        <li><span>Item</span><b>Weekend market</b></li>
-        <li><span>Paid to</span><b>Sandbox merchant</b></li>
+        <li><span>Item</span><b>Weekend Market</b></li>
+        <li><span>Paid To</span><b>Test Store</b></li>
         <li><span>Total</span><b className="big">$18.00</b></li>
       </ul>
 
-      {going ? (
-        <div className="handoff" role="status">
-          <span className="spin" />
-          <span>Handing you over to PayPal&rsquo;s sandbox checkout…</span>
-        </div>
-      ) : (
-        <div className="row" style={{ marginTop: 28 }}>
-          <button className="btn" onClick={go}>Continue to PayPal</button>
-          <Link className="btn dark" href="/story">Not now</Link>
-        </div>
-      )}
-      <p className="note">You&rsquo;ll leave Soul to pay on PayPal&rsquo;s sandbox site with the test buyer account, then come back here. No real money moves.</p>
+      <div className="row" style={{ marginTop: 28 }}>
+        <button className="btn" disabled={going} onClick={go}>{going ? "Making the Link…" : "Get the PayPal Link"}</button>
+        <Link className="btn dark" href="/story">Not Now</Link>
+      </div>
+      <p className="note">You pay on PayPal&rsquo;s sandbox site with your own sandbox login, and the new chapter appears once it&rsquo;s paid. No real money moves.</p>
     </div>
   );
 }

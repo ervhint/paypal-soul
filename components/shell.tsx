@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { post } from "@/lib/use-api";
+import { post, useApi } from "@/lib/use-api";
 
 const NAV = [
   { label: "Story", href: "/story" },
@@ -15,15 +15,31 @@ export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const source = useRef<HTMLDivElement>(null);
+  const { data, reload } = useApi<{ source: "prepared" | "own"; connected: boolean }>("/api/connect");
   const video = useRef<HTMLVideoElement>(null);
   const home = path === "/";
   const current = (href: string) => path === href || path.startsWith(href + "/") || (href === "/story" && path.startsWith("/buy"));
 
   useEffect(() => {
     setOpen(false);
-  }, [path]);
+    setMenu(false);
+    reload();
+  }, [path, reload]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    if (!menu) return;
+    const onDown = (e: PointerEvent) => !source.current?.contains(e.target as Node) && setMenu(false);
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [menu]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setMenu(false);
+      }
+    };
     const onResize = () => window.innerWidth > 720 && setOpen(false);
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
@@ -36,11 +52,35 @@ export function Shell({ children }: { children: ReactNode }) {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) video.current?.pause();
   }, []);
 
-  const reset = async () => {
-    await post("/api/reset");
+  const closeAll = async () => {
+    setMenu(false);
     setOpen(false);
-    router.push("/");
+    await reload();
+    router.push("/story");
   };
+  const choose = async (next: "prepared" | "own") => {
+    await post("/api/connect", { source: next });
+    await closeAll();
+  };
+  const logOut = async () => {
+    await fetch("/api/connect", { method: "DELETE" });
+    await closeAll();
+  };
+  const own = data?.source === "own";
+  const mark = (on: boolean) => <i className={`fa-solid fa-check${on ? "" : " off"}`} aria-hidden="true" />;
+  const choices = (
+    <>
+      <button onClick={() => choose("prepared")} aria-current={!own || undefined}>{mark(!own)} Prepared Data</button>
+      {data?.connected ? (
+        <>
+          <button onClick={() => choose("own")} aria-current={own || undefined}>{mark(own)} My Sandbox</button>
+          <button onClick={logOut}>{mark(false)} Log Out of My Sandbox</button>
+        </>
+      ) : (
+        <Link href="/connect">{mark(false)} Log In With PayPal</Link>
+      )}
+    </>
+  );
 
   return (
     <div className={`app${open ? " menu-open" : ""}${home ? " home" : ""}`}>
@@ -62,9 +102,14 @@ export function Shell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-          <button className="sign-in" onClick={reset} title="Start the demo over">
-            Reset demo
-          </button>
+          {!home && (
+            <div className="source" ref={source}>
+              <button className="sign-in" aria-haspopup="true" aria-expanded={menu} onClick={() => setMenu(!menu)}>
+                {own ? "Using My Sandbox" : "Using Prepared Data"} <i className="fa-solid fa-chevron-down" aria-hidden="true" />
+              </button>
+              {menu && <div className="source-menu">{choices}</div>}
+            </div>
+          )}
           <button className="burger" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen(!open)}>
             <span />
             <span />
@@ -80,9 +125,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   {n.label}
                 </Link>
               ))}
-              <button className="sheet-sign" onClick={reset} style={{ animationDelay: "0.25s" }}>
-                Reset demo
-              </button>
+              {!home && <div className="sheet-source">{choices}</div>}
             </div>
           </>
         )}

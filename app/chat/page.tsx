@@ -7,7 +7,7 @@ import type { Reply } from "@/lib/mock";
 
 type Msg = { role: "you"; text: string } | ({ role: "soul" } & Reply);
 
-const STARTERS = ["Why do groceries keep showing up?", "How much did I spend on myself?", "Tell me about my flights"];
+const STARTERS = ["Why Do Groceries Keep Showing Up?", "How Much Did I Spend on Myself?", "Tell Me About My Flights"];
 
 export default function ChatPage() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -31,7 +31,7 @@ export default function ChatPage() {
 
   return (
     <div className="wrap narrow">
-      <p className="eyebrow">Ask about your payments</p>
+      <p className="eyebrow">Ask About Your Payments</p>
       <h1 className="display" style={{ marginTop: 12, fontSize: "clamp(32px, 4.6vw, 54px)" }}>Chat</h1>
       <p className="lead">I answer from your payments and what you&rsquo;ve told me. If I can&rsquo;t point to a payment, I say so.</p>
 
@@ -44,7 +44,7 @@ export default function ChatPage() {
               <p className="reply">{m.text}</p>
               {m.sources.length > 0 && (
                 <>
-                  <p className="sources-title">Based on {m.sources.length === 1 ? "this payment" : `these ${m.sources.length} payments`}</p>
+                  <p className="sources-title">Based on {m.sources.length === 1 ? "This Payment" : `These ${m.sources.length} Payments`}</p>
                   <ul className="sources">{m.sources.map((p) => <PaymentRow key={p.id} p={p} />)}</ul>
                 </>
               )}
@@ -57,7 +57,7 @@ export default function ChatPage() {
             <span className="typing"><i /><i /><i /></span>
           </div>
         )}
-        <div ref={end} />
+        <div ref={end} style={{ scrollMarginBottom: 120 }} />
       </div>
 
       <div className="composer">
@@ -68,7 +68,7 @@ export default function ChatPage() {
             </div>
           )}
           <form onSubmit={(e) => { e.preventDefault(); ask(text); }}>
-            <input className="field" value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask a question" aria-label="Your question" />
+            <input className="field" value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask a Question" maxLength={300} aria-label="Your question" />
             <button className="btn" disabled={busy || !text.trim()}>Ask</button>
           </form>
         </div>

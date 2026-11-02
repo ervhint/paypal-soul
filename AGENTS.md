@@ -11,3 +11,6 @@ Status: `PROGRESS.md` · Plan: `docs/PLAN.md`
 - Repo: `ervhint/paypal-soul`, private. It must be public with an open source license before submission.
 
 Stack, commands and conventions get added here once verified.
+
+## Conventions
+- UI copy uses Title Case for headings, labels, buttons, tags, chips and short status text. Full sentences stay in sentence case. Use `titleCase` from `lib/title-case.ts` for names that come from data.

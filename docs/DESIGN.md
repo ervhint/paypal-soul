@@ -49,7 +49,7 @@ Content changed from the references (P3b):
 - 03 on phones: cells with no icon keep their text, because the spec would leave them empty.
 
 ## Golden path
-S-01 → S-02 → S-03 → S-04 → S-05 → S-07 → S-07a → S-10 → PayPal checkout → S-02c → S-08 → S-09
+S-01 → S-02 → S-03 → S-04 → S-05 → S-07 → S-07a → S-10 → S-13 → PayPal → S-02c → S-08 → S-13 → PayPal → S-09
 
 Stories in order: US-01, US-05, US-07, US-12, US-13, US-16, US-23, US-10, US-18, US-19, US-20.
 
@@ -81,7 +81,11 @@ In `app/globals.css`. Black page over `public/assets/bg.mp4` with a flat 80% dar
 ## Routes and screens (P4)
 | Screen | Where |
 | --- | --- |
-| S-01 | `/` |
+| S-01 | `/`, two options: prepared data, or Log in with PayPal with the minimum-data note |
+| S-12 | `/connect`: before PayPal, Check connection, and `?state=pending`, `denied`, `little`, `empty` (each offers the prepared data) |
+| S-13 | `/action/status?id=`: PayPal link, waiting, cancelled, link ran out, for send money and purchases |
+| S-14 | "Why are some rows missing?" sheet on `/story`, with the rows left out |
+| S-15 | Delete my data, on `/memory`, removes only that person's data |
 | S-02, S-02c | `/story` (new chapter appears after a purchase or a sent payment) |
 | S-02a, S-02b | `/story?state=syncing`, `?state=offline`, and `?state=empty` (prototype links at the bottom of the page, removed in P6) |
 | S-03, S-04, S-04a | evidence sheet on `/story`: tap a sentence, "That's not right", then a question if no person is named |
@@ -89,10 +93,10 @@ In `app/globals.css`. Black page over `public/assets/bg.mp4` with a flat 80% dar
 | S-06 | `/memory` |
 | S-07, S-07a, S-07b | `/chat` (ask about flights for the no-evidence reply) |
 | S-08, S-09, S-09a | `/action/confirm`, `/action/done`, `/action/failed` (failure through the prototype link on the confirm page) |
-| S-10 | `/buy`, a short hand-off, then back to `/story` |
+| S-10 | `/buy`, then S-13, then back to `/story` with the new chapter once paid |
 | S-11 | `/about` |
 
-Mock data comes from BFF routes under `app/api/*`, backed by `lib/mock.ts` (in memory, resets with "Reset demo").
+Mock data comes from BFF routes under `app/api/*`, backed by `lib/mock.ts` (in memory, cleared by Delete my data). Transaction IDs, the fee on done and the rows left out are prototype values.
 
 ## Image list (P4)
 No screen needs a new picture. Every screen uses the background video, the logo, and Font Awesome icons (coffee, bus, basket, carrot, signal, paper plane). Nothing is blank or dropped. Ask if you want photos or illustrations on any page.
