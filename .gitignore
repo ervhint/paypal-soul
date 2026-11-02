@@ -5,3 +5,4 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 DESIGN-REFERENCE-0*.md
+FINDINGS.local.md
