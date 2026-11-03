@@ -16,7 +16,7 @@ Next.js 16 (App Router) + TypeScript 7 + Tailwind 4 · BFF in Route Handlers (`a
 
 ## Commands
 - `npm.cmd run dev`: localhost:3000 against Staging. PowerShell blocks `npm.ps1`, so use `npm.cmd` there (plain `npm` in Git Bash).
-- `npm test`: typecheck (`tsc --noEmit`) then Vitest (`tests/**/*.test.ts`). Integration tests hit the hosted Staging project with keys from `.env.local`. Run before every unit report and commit.
+- `npm test`: `next typegen` (makes the gitignored `next-env.d.ts`, needed in CI), typecheck (`tsc --noEmit`), then Vitest (`tests/**/*.test.ts`). Integration tests hit the hosted Staging project with keys from `.env.local`. Run before every unit report and commit.
 - `npm run build`: production build, also run in CI.
 - CI (`.github/workflows/ci.yml`, every push and PR): `npm test`, `npm run build`, and gitleaks over the full history. Needs GitHub secrets `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SECRET_KEY` (Staging).
 - Pre-commit hook: `.git/hooks/pre-commit` runs `gitleaks git --pre-commit --redact --staged --verbose`. Hooks aren't committed; recreate it on a new clone. Never `--no-verify`.

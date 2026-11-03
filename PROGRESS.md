@@ -9,7 +9,7 @@ Accounts: OpenRouter key `paypal-soul-app` in .env.local ($20 limit, expires 202
 
 | Build phase | Unit | Status | Tests | Notes |
 | --- | --- | --- | --- | --- |
-| A Setup | U0 skeleton, tests, architecture | committed | T-0.2–T-0.7 ✅, NF-4 ✅, T-0.1 on push | approved 2026-11-03, migration `init` on Staging, GitHub secrets set |
+| A Setup | U0 skeleton, tests, architecture | committed | T-0.2–T-0.7 ✅, NF-4 ✅, T-0.1 ❌ then fix | commit 18abfa1: CI gitleaks ✅, test ❌ (no `next-env.d.ts` in CI). Fix: `next typegen` in `npm test` (passes locally), pushed in the next commit |
 | B Enter and read | U1 entry, private copy, data menu | todo | — | |
 | B Enter and read | U2 PayPal import, rows left out | todo | — | |
 | B Enter and read | U3 automatic categories | todo | — | |

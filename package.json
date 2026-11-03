@@ -5,7 +5,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "tsc --noEmit && vitest run"
+    "test": "next typegen && tsc --noEmit && vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
