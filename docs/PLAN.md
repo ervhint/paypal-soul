@@ -126,23 +126,147 @@ Also near: [Salah](https://salah-liart.vercel.app/#/overview), merchant intellig
 | NF-13 | The demo stays up and free to use until Dec 15, 2026 | Daily job keeps Supabase awake, checked in P7 |
 
 ## 3. Data entities
-Draft for the P6 architecture step, which adds the Mermaid ER diagram and RLS policies here.
+Schema: `supabase/migrations/20261103102320_init.sql` (U0, applied to Staging). No PayPal keys or tokens anywhere, only the PayPal account ID (NF-5).
 
 | Entity | Holds | Owner |
 | --- | --- | --- |
-| person | Supabase anonymous user, the data source in use, last visit | self |
-| paypal_account | PayPal account ID and consent tracking ID, prepared or own. No keys or tokens | shared (prepared) or one person |
-| payment | Copy of a kept PayPal row: transaction ID, date, amount, name, payee, event code, category, `unknown` when unsure | the paypal_account, so prepared payments are shared |
-| left_out_row | Rows Soul skips (T1900, T0300 and others) with the reason | the paypal_account |
-| import_cursor | Newest date read per account, so a refresh reads only what's new | the paypal_account |
-| chapter + claim | Story chapters and their sentences, each claim linked to payments and a belief | person |
-| belief | What Soul believes (habit, check, interest), how sure, active or stopped, linked payments | person |
-| correction | The person's words, the belief before and after, the claim it rewrote, undone or not | person |
-| chat_message | Questions and answers with cited payment IDs | person |
-| action | Send money or purchase: PayPal order ID, recipient, amount, fee, status (waiting, completed, cancelled, expired, failed) | person |
-| usage | Questions asked per person per day | person |
+| person | One per anonymous Supabase user: the account in use, last visit | self |
+| paypal_account | PayPal account ID, consent tracking ID, `synced_through` (the import cursor). Prepared has no owner | shared (prepared) or one person |
+| payment | Copy of a kept PayPal row: transaction ID, date, amount, name, payee, event code, category (`null` until categorised, `unknown` when unsure) | the account, so prepared payments are shared |
+| left_out_row | Rows Soul skips (T1900, T0300 and others) with the reason | the account |
+| belief | Habit, check or interest, how sure, source, payment IDs, active or stopped | person + account |
+| chapter + claim | Story chapters and their sentences. Each claim has payment IDs and maybe a belief | person + account |
+| correction | The person's words, belief and claim before and after, Here's What Changed notes, undone or not | person + account |
+| chat_message | Questions and answers with cited payment IDs | person + account |
+| action | Send money or purchase: PayPal order ID, recipient, amount, fee, capture ID, status | person + account |
 
-The category list lives in code, from the user's approved list. Prepared payments are read once and shared. Each person gets their own chapters, beliefs, corrections and chat, first copied from the prepared starting point.
+Personal rows carry both the person and the account, so prepared data and an own sandbox each keep their own story, memory and chat (AC-10.4). The import cursor is a column, not a table. Questions per day are counted from `chat_message`, so there's no usage table. The category list lives in code. Payment IDs on claims, beliefs and chat are `uuid[]` arrays; claims and beliefs need at least one (NF-7).
+
+```mermaid
+erDiagram
+  AUTH_USERS ||--|| PERSON : "is"
+  AUTH_USERS ||--o{ PAYPAL_ACCOUNT : "owns (own sandbox)"
+  PAYPAL_ACCOUNT ||--o{ PERSON : "in use by"
+  PAYPAL_ACCOUNT ||--o{ PAYMENT : has
+  PAYPAL_ACCOUNT ||--o{ LEFT_OUT_ROW : has
+  PERSON ||--o{ BELIEF : has
+  PERSON ||--o{ CHAPTER : has
+  CHAPTER ||--o{ CLAIM : has
+  BELIEF |o--o{ CLAIM : "backs"
+  PERSON ||--o{ CORRECTION : makes
+  BELIEF |o--o{ CORRECTION : changes
+  CLAIM |o--o{ CORRECTION : rewrites
+  PERSON ||--o{ CHAT_MESSAGE : sends
+  PERSON ||--o{ ACTION : confirms
+  PAYPAL_ACCOUNT ||--o{ BELIEF : "scopes"
+  PAYPAL_ACCOUNT ||--o{ ACTION : "scopes"
+  PAYPAL_ACCOUNT {
+    uuid id PK
+    text kind
+    text paypal_account_id
+    text tracking_id
+    uuid owner_id FK
+    timestamptz synced_through
+  }
+  PERSON {
+    uuid id PK
+    uuid account_id FK
+    timestamptz last_visit_at
+  }
+  PAYMENT {
+    uuid id PK
+    uuid account_id FK
+    text paypal_txn_id
+    timestamptz occurred_at
+    numeric amount
+    text name
+    text payee
+    text event_code
+    text category
+  }
+  LEFT_OUT_ROW {
+    uuid id PK
+    uuid account_id FK
+    text paypal_txn_id
+    text event_code
+    numeric amount
+    text reason
+  }
+  BELIEF {
+    uuid id PK
+    uuid person_id FK
+    uuid account_id FK
+    text kind
+    text text
+    text sureness
+    uuid_array payment_ids
+    bool active
+  }
+  CHAPTER {
+    uuid id PK
+    uuid person_id FK
+    uuid account_id FK
+    text title
+    date starts_on
+    date ends_on
+    bool is_new
+    jsonb suggestion
+  }
+  CLAIM {
+    uuid id PK
+    uuid chapter_id FK
+    uuid person_id FK
+    int position
+    text text
+    uuid_array payment_ids
+    uuid belief_id FK
+    bool rewritten
+  }
+  CORRECTION {
+    uuid id PK
+    uuid person_id FK
+    uuid account_id FK
+    uuid belief_id FK
+    uuid claim_id FK
+    text said
+    text_array notes
+    timestamptz undone_at
+  }
+  CHAT_MESSAGE {
+    uuid id PK
+    uuid person_id FK
+    uuid account_id FK
+    text role
+    text text
+    uuid_array payment_ids
+  }
+  ACTION {
+    uuid id PK
+    uuid person_id FK
+    uuid account_id FK
+    text kind
+    text paypal_order_id
+    text recipient
+    numeric amount
+    numeric fee
+    text status
+  }
+```
+
+Deleting an auth user cascades to their person, their own account with its payments, and every personal row, so Delete My Data and the 30-day cleanup are one call. The prepared account and its payments stay.
+
+### RLS policies
+RLS is on for every table. Visitors without a session have no grants at all. The server's secret key bypasses RLS for imports, captures and the daily job; it never reaches the browser.
+
+| Table | Signed-in person can | Rule |
+| --- | --- | --- |
+| paypal_account | read | prepared (no owner) or `owner_id = auth.uid()` |
+| payment, left_out_row | read | the account is readable (same rule) |
+| person | read, write | `id = auth.uid()` |
+| belief, chapter, claim, correction, chat_message | read, write | `person_id = auth.uid()` |
+| action | read | `person_id = auth.uid()`. Status, fee and capture come from PayPal through the server only |
+
+Tested by `tests/rls.test.ts` on Staging with two anonymous test people (NF-4).
 
 ## 4. Build phases and units
 Prototype screens and states are in docs/DESIGN.md. Each unit replaces the matching mock in `lib/mock.ts` behind the same BFF routes, so the pages change as little as possible. Estimates include building, the browser test and the user's review.
@@ -344,6 +468,9 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 3 | The daily job is one Vercel Cron route protected by a secret. On localhost it's called by hand | Free on Vercel, and one job covers import, captures, cleanup and keeping Supabase awake |
 | Nov 3 | `npm test` (typecheck and Vitest) runs on localhost before every unit report and commit, and GitHub Actions runs it again with the build and a gitleaks scan on every push. PayPal and the LLM are mocked in unit tests. RLS and data tests use the hosted Staging project with a test person who cleans up. Browser tests run with Claude in Chrome on localhost at 1440px and 375px, covering every page state | Workflow V11 rules 11 and 22, and P6 step 3 |
 | Nov 3 | US-24 (identity-only login) cut | Already Won't in the scope table. It gives no payments |
+| Nov 3 | U0 architecture: the browser never talks to Supabase. The BFF holds the anonymous session in a cookie and calls Supabase with the anon key, so RLS still applies per person. The secret key is used only for shared tables, captures and the daily job. No `NEXT_PUBLIC_` variables, which is stricter than NF-3 | Workflow rule 13, and nothing to leak from the bundle |
+| Nov 3 | Personal rows are keyed by person and account. The import cursor is a column on the account, and questions per day are counted from chat, so `import_cursor` and `usage` tables were dropped | Each data source keeps its own memory (AC-10.4), with two fewer tables |
+| Nov 3 | Actions are read-only for people. Shared tables are written only by the server | A person can't mark a payment completed or add fake payments, even with their own token |
 
 ## 6. Open questions
 1. Settled at G5: anonymous Supabase users for the private copy.

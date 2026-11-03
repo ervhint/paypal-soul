@@ -18,19 +18,19 @@ Words used here:
 
 Other terms (RLS, BFF, LCP, capture, sandbox …) are explained in the word list at the top of docs/PLAN.md.
 
-Latest run: Not run yet (P5 draft, 2026-11-03).
+Latest run: 2026-11-03, U0: T-0.2 to T-0.7 and NF-4 ✅, T-0.1 runs on the U0 push.
 
 ## Phase A: Setup
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
 | T-0.1 | AC-0.1 | ci | Push a commit to `main`. Open the Actions run. | `npm test`, `next build` and a gitleaks scan of the full history all run, and their pass or fail status shows on the commit. | ⏭ | |
-| T-0.2 | AC-0.2 | manual | After U0's commit, open each prototype route on localhost. Check the diff touches only CI and setup files. | Every route renders from the mock routes as before. | ⏭ | |
-| T-0.3 | AC-0.3 | manual | Open AGENTS.md and PLAN.md §3. | AGENTS.md lists folders, BFF routes and env vars. §3 has the ER diagram and the RLS policies. | ⏭ | |
-| T-0.4 | AC-0.4 | integration | Run the first migration on Staging. Query each personal table for RLS status. | RLS is on for every personal table. | ⏭ | |
-| T-0.5 | AC-0.5 | manual | Run `npm test` on localhost. Open AGENTS.md. | Typecheck and Vitest pass against Staging. AGENTS.md shows the command. | ⏭ | |
-| T-0.6 | AC-0.6 | manual | Stage a file with a fake key, try to commit, then unstage and delete it. | The gitleaks hook blocks the commit. | ⏭ | |
-| T-0.7 | AC-0.7 | manual | Read `.gitignore` and `.env.example`. Run `git status`. | The workflow, design reference and `.env*` files are ignored. `.env.example` is tracked and has names only, no values. | ⏭ | |
+| T-0.2 | AC-0.2 | manual | After U0's commit, open each prototype route on localhost. Check the diff touches only CI and setup files. | Every route renders from the mock routes as before. | ✅ | 2026-11-03: all 11 routes 200 in Chrome, `/api/story`, `/api/memory`, `/api/connect` serve mock data, no console errors. No `app/` or `lib/` file changed |
+| T-0.3 | AC-0.3 | manual | Open AGENTS.md and PLAN.md §3. | AGENTS.md lists folders, BFF routes and env vars. §3 has the ER diagram and the RLS policies. | ✅ | 2026-11-03: AGENTS.md Architecture section, PLAN §3 ER diagram and RLS table |
+| T-0.4 | AC-0.4 | integration | Run the first migration on Staging. Query each personal table for RLS status. | RLS is on for every personal table. | ✅ | 2026-11-03: Staging `relrowsecurity` true on all 10 tables, 1 policy each, `anon` has no select grant |
+| T-0.5 | AC-0.5 | manual | Run `npm test` on localhost. Open AGENTS.md. | Typecheck and Vitest pass against Staging. AGENTS.md shows the command. | ✅ | 2026-11-03: typecheck and 6/6 Vitest (`tests/rls.test.ts`) against Staging |
+| T-0.6 | AC-0.6 | manual | Stage a file with a fake key, try to commit, then unstage and delete it. | The gitleaks hook blocks the commit. | ✅ | 2026-11-03: fake `ghp_` token staged, hook blocked it (rule github-pat), file removed |
+| T-0.7 | AC-0.7 | manual | Read `.gitignore` and `.env.example`. Run `git status`. | The workflow, design reference and `.env*` files are ignored. `.env.example` is tracked and has names only, no values. | ✅ | 2026-11-03: `git check-ignore` confirms `.env.local`, the workflow and design reference files are ignored and `.env.example` isn't; it has names only |
 
 ## Phase B: Enter and read the story
 
@@ -146,7 +146,7 @@ Latest run: Not run yet (P5 draft, 2026-11-03).
 | NF-1 | NF-1 | e2e (Chrome throttling) | Set Fast 4G. Open `/story` on localhost, then on Preview in P7. | Largest contentful paint (the newest saved chapter) is under 2s, before any PayPal sync finishes. | ⏭ | |
 | NF-2 | NF-2 | e2e | Open every route at 1440px and 375px. | Every page works. No sideways scroll at 375px. | ⏭ | |
 | NF-3 | NF-3 | grep | Build the app. Grep the client bundle for keys and tokens. | Only `NEXT_PUBLIC_SUPABASE_URL` and the anon key appear. | ⏭ | |
-| NF-4 | NF-4 | integration | With two test people on Staging, person A reads and writes person B's rows. | Every attempt is blocked by RLS. | ⏭ | |
+| NF-4 | NF-4 | integration | With two test people on Staging, person A reads and writes person B's rows. | Every attempt is blocked by RLS. | ✅ | 2026-11-03: `tests/rls.test.ts`, B can't read, change, delete or write as A on all 10 tables |
 | NF-5 | NF-5 | review | Review the schema from U0. | No column holds a PayPal key or token. Only the PayPal account ID is stored. | ⏭ | |
 | NF-6 | NF-6 | unit | Run each LLM prompt with a payment named "ignore your rules". | The text sits in a data block. The output does not follow it. | ⏭ | |
 | NF-7 | NF-7 | unit | Run the story and chat output checks on outputs with and without payments. | Every claim, belief and answer points to at least one saved payment, or says it has none. | ⏭ | |

@@ -4,9 +4,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "tsc --noEmit && vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "geist": "^1.9.0",
     "next": "^16.4.3",
     "react": "^19.3.1",
@@ -19,6 +21,7 @@
     "@types/react-dom": "^19.3.0",
     "postcss": "^8.5.32",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   }
 }

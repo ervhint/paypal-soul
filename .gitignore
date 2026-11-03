@@ -1,9 +1,10 @@
 .env*
-HACKATHON-WORKFLOW-V*.md
+!.env.example
+HACKATHON-WORKFLOW-*
+DESIGN-REFERENCE-*
+FINDINGS.local.md
 node_modules/
 .next/
 next-env.d.ts
 *.tsbuildinfo
-DESIGN-REFERENCE-0*.md
-FINDINGS.local.md
 .playwright-mcp/
