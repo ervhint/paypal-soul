@@ -7,9 +7,9 @@ import { post } from "@/lib/use-api";
 type State = "start" | "check" | "checking" | "pending" | "denied" | "little" | "empty";
 const OUTCOMES: [State, string][] = [["pending", "Not Approved Yet"], ["denied", "Approved, Can't Read"], ["little", "Too Little Data"], ["empty", "Empty Account"]];
 const FOUND = [
-  { need: "Payments Across at Least 7 Days", got: "3 days", ok: false },
-  { need: "5 or More Payments", got: "2 payments", ok: false },
-  { need: "At Least 1 Repeat", got: "1 repeat", ok: true },
+  { need: "Payments Across at Least 7 Days", got: "3 of 7 Days", ok: false },
+  { need: "5 or More Payments", got: "2 of 5 Payments", ok: false },
+  { need: "At Least 1 Repeat", got: "1 of 1 Repeat", ok: true },
 ];
 const title = { fontSize: "clamp(32px, 4.6vw, 54px)", marginTop: 12 };
 
@@ -37,10 +37,10 @@ function Connect() {
       <div className="wrap narrow">
         <p className="eyebrow">Log In With PayPal · Sandbox</p>
         <h1 className="display" style={title}>Connect Your Sandbox Account</h1>
-        <p className="lead">PayPal asks you to approve Soul, then Soul reads your sandbox payments. Use a sandbox login, not your real PayPal login.</p>
+        <p className="lead">PayPal asks you to approve me, then I read your sandbox payments. Use a sandbox login, not your real PayPal login.</p>
         <ul className="steps">
-          <li><i className="fa-solid fa-shield-halved" aria-hidden="true" /><span><b>PayPal&rsquo;s page lists more than Soul uses.</b> It also names payment, refund and fee permissions, as one bundle. Soul only reads your payments.</span></li>
-          <li><i className="fa-solid fa-key" aria-hidden="true" /><span><b>Soul keeps your PayPal account ID.</b> No keys or tokens. You can delete your data at any time.</span></li>
+          <li><i className="fa-solid fa-shield-halved" aria-hidden="true" /><span><b>PayPal&rsquo;s page lists more than I use.</b> It also names payment, refund and fee permissions, as one bundle. I only read your payments.</span></li>
+          <li><i className="fa-solid fa-key" aria-hidden="true" /><span><b>I keep your PayPal account ID.</b> No keys or tokens. You can delete your data at any time.</span></li>
           <li><i className="fa-solid fa-receipt" aria-hidden="true" /><span><b>A story needs some history.</b> 5 or more payments across at least 7 days, with 1 repeat. With less, I&rsquo;ll tell you what&rsquo;s missing.</span></li>
         </ul>
         <div className="row" style={{ marginTop: 28 }}>
@@ -62,14 +62,14 @@ function Connect() {
   if (state === "little")
     return (
       <div className="wrap narrow">
-        <p className="eyebrow">Connected, but It&rsquo;s Early</p>
+        <p className="eyebrow">Connected, Still Using Prepared Data</p>
         <h1 className="display" style={title}>Not Enough Here for a Story Yet</h1>
         <p className="lead">I don&rsquo;t want to invent a pattern from a few payments. Here&rsquo;s what I found in your sandbox account.</p>
         <ul className="steps">
           {FOUND.map((f) => (
             <li key={f.need}>
               <i className={`fa-solid fa-${f.ok ? "check" : "xmark"}`} aria-hidden="true" />
-              <span><b>{f.need}</b><br />{f.ok ? "Met" : "Missing"}: {f.got} so far</span>
+              <span><b>{f.need}</b><br />{f.got}</span>
             </li>
           ))}
         </ul>
@@ -81,7 +81,7 @@ function Connect() {
   if (state === "empty")
     return (
       <div className="wrap narrow">
-        <p className="eyebrow">Connected</p>
+        <p className="eyebrow">Connected, Still Using Prepared Data</p>
         <h1 className="display" style={title}>This Account Has No Payments</h1>
         <p className="lead">The connection works, but PayPal shows no payments for this sandbox account, so I have nothing to write about.</p>
         <div className="row" style={{ marginTop: 28 }}>{usePrepared}{again}</div>
@@ -93,7 +93,7 @@ function Connect() {
       <div className="wrap narrow">
         <p className="eyebrow">Approved, but No Access</p>
         <h1 className="display" style={title}>PayPal Won&rsquo;t Let Me Read This Account</h1>
-        <p className="lead">You approved Soul, but PayPal still refuses to share this account&rsquo;s payments. Try another sandbox account, or use the prepared data.</p>
+        <p className="lead">You approved me, but PayPal still refuses to share this account&rsquo;s payments. Try another sandbox account, or use the prepared data.</p>
         <div className="row" style={{ marginTop: 28 }}>
           {usePrepared}
           <button className="btn dark" onClick={() => setState("start")}>Try Another Account</button>
@@ -116,7 +116,7 @@ function Connect() {
       </div>
       <p className="note"><button className="link" style={{ fontSize: 13.5 }} onClick={prepared}>Use Our Prepared Data Instead</button></p>
       <p className="note">
-        Prototype, see what Check connection can find:{" "}
+        Prototype, see what Check Connection can find:{" "}
         {OUTCOMES.map(([s, label], i) => (
           <span key={s}>{i > 0 && " · "}<button className="link" style={{ fontSize: 13.5 }} onClick={() => check(s)}>{label}</button></span>
         ))}

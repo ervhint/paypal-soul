@@ -217,7 +217,7 @@ export function chat(message: string): Reply {
       ? {
           text: `Groceries went to ${s.who}: two payments, ${total(ps)} together. You told me so today, so I don't count them as spending on you.`,
           sources: ps,
-          action: { label: "Send $25.00 Towards Next Week", href: "/action/confirm" },
+          action: { label: `Send ${titleCase(s.who)} $25.00`, href: "/action/confirm" },
         }
       : { text: `Two grocery payments, ${total(ps)} together. I think they're for you, but I'm not sure. Tell me if I'm wrong.`, sources: ps };
   }

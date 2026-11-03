@@ -4,13 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { post, useApi } from "@/lib/use-api";
 import { Skeleton, Toast, useToast } from "@/components/ui";
-import type { Memory } from "@/lib/mock";
+import { titleCase } from "@/lib/title-case";
+import type { Memory, Payment } from "@/lib/mock";
 
 const patch = (body: object) =>
   fetch("/api/memory", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 export default function MemoryPage() {
   const { data, setData } = useApi<Memory[]>("/api/memory");
+  const { data: story } = useApi<{ payments: Payment[] }>("/api/story");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -42,22 +44,30 @@ export default function MemoryPage() {
               <div>
                 <div className="mem-text">{m.text}</div>
                 <div className="mem-meta">
-                  <span className={m.kind === "check" ? "check" : ""}>{m.kind === "check" ? "To Check" : m.sure}</span>
+                  <span>{m.sure}</span>
                   <span>{m.source}</span>
                   {m.source.startsWith("You Told Me") && <span className="tag">Updated</span>}
                   {!m.active && <span className="tag plain">Not Used</span>}
-                  <Link className="link" href="/story" style={{ fontSize: 13.5 }}>See in Story</Link>
+                </div>
+                <div className="mem-pays">
+                  {story?.payments.filter((p) => m.paymentIds.includes(p.id)).map((p) => (
+                    <Link key={p.id} className="pay-chip" href="/story" title={`PayPal ID ${p.txn}`}>
+                      <i className={`fa-solid fa-${p.icon}`} aria-hidden="true" /> {titleCase(p.item)} · {p.date}
+                    </Link>
+                  ))}
                 </div>
               </div>
-              <div className="mem-actions">
+              {editing !== m.id && <div className="mem-actions">
                 <button className="btn dark small" onClick={() => { setEditing(m.id); setDraft(m.text); }}>Edit</button>
                 <button className="btn line small" onClick={() => toggle(m)}>{m.active ? "Stop Using This" : "Use Again"}</button>
-              </div>
+              </div>}
               {editing === m.id && (
                 <form onSubmit={(e) => { e.preventDefault(); save(m); }}>
-                  <input className="field" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Edit belief" autoFocus />
-                  <button className="btn small" disabled={!draft.trim()}>Save</button>
-                  <button type="button" className="btn dark small" onClick={() => setEditing(null)}>Cancel</button>
+                  <textarea className="field" rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Edit belief" autoFocus />
+                  <div className="row">
+                    <button className="btn small" disabled={!draft.trim()}>Save</button>
+                    <button type="button" className="btn dark small" onClick={() => setEditing(null)}>Cancel</button>
+                  </div>
                 </form>
               )}
             </li>
@@ -69,8 +79,8 @@ export default function MemoryPage() {
         <p>Removes your corrections, memory, chat and saved chapters from Soul. Your PayPal sandbox account isn&rsquo;t touched.</p>
         {deleting ? (
           <div className="row" style={{ marginTop: 14 }}>
-            <button className="btn small" onClick={async () => { await post("/api/reset"); router.push("/"); }}>Yes, Delete It All</button>
-            <button className="btn dark small" onClick={() => setDeleting(false)}>Keep My Data</button>
+            <button className="btn line small" onClick={async () => { await post("/api/reset"); router.push("/?deleted=1"); }}>Yes, Delete It All</button>
+            <button className="btn small" onClick={() => setDeleting(false)}>Keep My Data</button>
           </div>
         ) : (
           <button className="btn line small" style={{ marginTop: 14 }} onClick={() => setDeleting(true)}>Delete My Data</button>

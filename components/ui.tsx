@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Payment } from "@/lib/mock";
 import { titleCase } from "@/lib/title-case";
 
-export const money = (n: number) => `$${n.toFixed(2)}`;
+export const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -43,11 +43,11 @@ export function Toast({ text }: { text: string }) {
 export function useToast() {
   const [text, setText] = useState("");
   const timer = useRef<number>(0);
-  const show = (t: string) => {
+  const show = useCallback((t: string) => {
     setText(t);
     clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setText(""), 3200);
-  };
+  }, []);
   return { text, show };
 }
 
@@ -82,6 +82,26 @@ export const PaymentRow = ({ p }: { p: Payment }) => (
     <span className="pay-amt">{money(p.amount)}</span>
   </li>
 );
+
+export function Receipt({ stages, now, bad, amount, title, children }: { stages: string[]; now: number; bad?: boolean; amount: number; title: string; children?: ReactNode }) {
+  return (
+    <div className="receipt">
+      <ol className="stages">
+        {stages.slice(0, bad ? now + 1 : undefined).map((s, i) => (
+          <li key={s} className={i === now ? "now" : i < now ? "past" : ""} aria-current={i === now ? "step" : undefined}>
+            {i < now && <i className="fa-solid fa-check" aria-hidden="true" />}
+            {i === now && bad && <i className="fa-solid fa-xmark" aria-hidden="true" />}
+            {i === now && !bad && i === stages.length - 1 && <i className="fa-solid fa-check" aria-hidden="true" />}
+            {s}
+          </li>
+        ))}
+      </ol>
+      <p className={`display receipt-amt${bad ? " dim" : ""}`}>{money(amount)}</p>
+      <h1 className="receipt-title">{title}</h1>
+      {children}
+    </div>
+  );
+}
 
 export function CountUp({ to, decimals = 0, prefix = "" }: { to: number; decimals?: number; prefix?: string }) {
   const [v, setV] = useState(0);

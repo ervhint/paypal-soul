@@ -16,6 +16,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [paused, setPaused] = useState(false);
   const source = useRef<HTMLDivElement>(null);
   const { data, reload } = useApi<{ source: "prepared" | "own"; connected: boolean }>("/api/connect");
   const video = useRef<HTMLVideoElement>(null);
@@ -49,7 +50,10 @@ export function Shell({ children }: { children: ReactNode }) {
     };
   }, []);
   useEffect(() => {
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) video.current?.pause();
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      video.current?.pause();
+      setPaused(true);
+    }
   }, []);
 
   const closeAll = async () => {
@@ -66,6 +70,11 @@ export function Shell({ children }: { children: ReactNode }) {
     await fetch("/api/connect", { method: "DELETE" });
     await closeAll();
   };
+  const toggleVideo = () => {
+    if (paused) video.current?.play();
+    else video.current?.pause();
+    setPaused(!paused);
+  };
   const own = data?.source === "own";
   const mark = (on: boolean) => <i className={`fa-solid fa-check${on ? "" : " off"}`} aria-hidden="true" />;
   const choices = (
@@ -77,13 +86,14 @@ export function Shell({ children }: { children: ReactNode }) {
           <button onClick={logOut}>{mark(false)} Log Out of My Sandbox</button>
         </>
       ) : (
-        <Link href="/connect">{mark(false)} Log In With PayPal</Link>
+        <Link href="/connect">{mark(false)} Log In With PayPal <span className="sbx">Sandbox</span></Link>
       )}
     </>
   );
 
   return (
     <div className={`app${open ? " menu-open" : ""}${home ? " home" : ""}`}>
+      <a className="skip" href="#main">Skip to Content</a>
       <div className="bg">
         <video ref={video} className="bg-video" autoPlay muted loop playsInline aria-hidden="true">
           <source src="/assets/bg.mp4" type="video/mp4" />
@@ -129,8 +139,11 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           </>
         )}
-        {children}
+        <main id="main" className="main" tabIndex={-1}>{children}</main>
       </div>
+      <button className={`video-toggle${path === "/chat" ? " raised" : ""}`} onClick={toggleVideo} aria-label={paused ? "Play Background Video" : "Pause Background Video"}>
+        <i className={`fa-solid fa-${paused ? "play" : "pause"}`} aria-hidden="true" />
+      </button>
     </div>
   );
 }

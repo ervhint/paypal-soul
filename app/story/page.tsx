@@ -121,19 +121,6 @@ function StoryView() {
             <p>This is the story I saved this morning. It may be missing newer payments. I&rsquo;ll catch up when PayPal is back.</p>
           </div>
         )}
-        {change && !seen && (
-          <details className="changes" aria-label="What changed">
-            <summary>
-              <span className="tag">Rewritten</span> You Corrected Me. See What Changed
-              <button className="link" onClick={(e) => { e.preventDefault(); setSeen(true); fetch("/api/story", { method: "DELETE" }); }}>Looks Right</button>
-            </summary>
-            <p className="before">{change.before}</p>
-            <ul>{change.notes.map((n) => <li key={n}>{n}</li>)}</ul>
-            <div className="row" style={{ marginTop: 16 }}>
-              <Link className="btn line small" href="/memory">See What I Remember</Link>
-            </div>
-          </details>
-        )}
         {data.chapters.map((ch, i) => (
           <article key={ch.id} className={`chapter${ch.fresh ? " fresh" : ""}`}>
             <p className="eyebrow">
@@ -145,12 +132,33 @@ function StoryView() {
             <p className="prose">
               {ch.claims.map((c) => (
                 <span key={c.id}>
-                  <button className={`claim${c.rewritten ? " changed" : ""}`} onClick={() => open(c)} aria-label={`${c.text} Show the payments behind this.`}>
-                    {c.text}
+                  <button className={`claim${c.id === change?.claimId && !seen ? " changed" : ""}`} onClick={() => open(c)} aria-label={`${c.text} Show the payments behind this.`}>
+                    <span className="claim-text">{c.text}</span>
                   </button>{" "}
                 </span>
               ))}
             </p>
+              {change && !seen && ch.claims.some((c) => c.id === change.claimId) && (
+                <details className="changes" aria-label="What changed">
+                  <summary>
+                    <span className="tag">Rewritten</span> You Corrected Me
+                    <button className="link" onClick={(e) => { e.preventDefault(); setSeen(true); fetch("/api/story", { method: "DELETE" }); }}>Looks Right</button>
+                  </summary>
+                  <p className="before">{change.before}</p>
+                  <ul>{change.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+                  <div className="row" style={{ marginTop: 16 }}>
+                    <Link className="btn line small" href="/memory">See What I Remember</Link>
+                  </div>
+                </details>
+              )}
+            {check && checkClaim && ch.claims.includes(checkClaim) && (
+              <div className="check-note">
+                <span className="tag plain">Not Sure</span>
+                <h2>{check.text}</h2>
+                <p>I&rsquo;m guessing from two payments. Check them for me.</p>
+                <button className="btn dark small" onClick={() => open(checkClaim)}>Check the Payments</button>
+              </div>
+            )}
             {ch.suggest && (
               <div className="suggest">
                 <p>{ch.suggest.text}</p>
@@ -168,14 +176,6 @@ function StoryView() {
             <div className="rail-stat" key={l}><span>{l}</span><b className={h ? "hot" : ""}>{v}</b></div>
           ))}
         </div>
-        {check && checkClaim && (
-          <div className="panel">
-            <p className="eyebrow"><span className="tag plain">Not Sure</span></p>
-            <h2 style={{ marginTop: 10 }}>{check.text}</h2>
-            <p>I&rsquo;m guessing from two payments. Check them for me.</p>
-            <button className="btn dark small" style={{ marginTop: 14 }} onClick={() => open(checkClaim)}>Check the Payments</button>
-          </div>
-        )}
         {waiting.map((a) => (
           <div className="panel" key={a.id} role="status">
             <p className="eyebrow"><span className="tag plain">Waiting on PayPal</span></p>
@@ -185,8 +185,10 @@ function StoryView() {
           </div>
         ))}
         <Link className="btn line" href="/buy">Make a Sandbox Purchase</Link>
-        <button className="btn dark" disabled={refreshing} onClick={refresh}>{refreshing ? "Reading PayPal…" : "Refresh From PayPal"}</button>
-        <button className="link" style={{ textAlign: "left" }} onClick={() => setMissing(true)}>Why Are Some Rows Missing?</button>
+        <div className="rail-links">
+          <button className="link" disabled={refreshing} onClick={refresh}>{refreshing ? "Reading PayPal…" : "Refresh From PayPal"}</button>
+          <button className="link" onClick={() => setMissing(true)}>Why Are Some Rows Missing?</button>
+        </div>
       </aside>
 
       <Sheet open={!!claim} onClose={close} title="Payments behind this sentence">

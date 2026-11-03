@@ -2,13 +2,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { post, useApi } from "@/lib/use-api";
-import { CountUp } from "@/components/ui";
+import { useEffect } from "react";
+import { CountUp, Toast, useToast } from "@/components/ui";
 
 type Summary = { summary: { payments: number; spent: number; habits: number; checks: number } };
 
 export default function Welcome() {
   const router = useRouter();
   const { data } = useApi<Summary>("/api/story");
+  const toast = useToast();
+  const { show } = toast;
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("deleted") !== "1") return;
+    history.replaceState(null, "", "/");
+    show("Deleted. Your corrections, memory and chat are gone.");
+  }, [show]);
   const prepared = async () => {
     await post("/api/connect", { source: "prepared" });
     router.push("/story");
@@ -16,17 +24,14 @@ export default function Welcome() {
   const s = data?.summary;
   const stats = s && [
     { v: <CountUp to={s.payments} />, label: "Payments Behind This" },
-    { v: <CountUp to={s.spent} decimals={2} prefix="$" />, label: "Spent on You So Far" },
+    { v: <CountUp to={s.spent} decimals={2} prefix="$" />, label: "Spent So Far" },
     { v: <CountUp to={s.habits} />, label: "Habits Noticed" },
     { v: <CountUp to={s.checks} />, label: "Belief to Check" },
   ];
   return (
     <>
-      <main className="hero">
+      <div className="hero">
         <div className="trust anim" style={{ "--d": "0.05s" } as React.CSSProperties}>
-          <span className="avatar a1"><span><i className="fa-solid fa-mug-hot" /></span></span>
-          <span className="avatar a2"><span><i className="fa-solid fa-bus" /></span></span>
-          <span className="avatar a3"><span><i className="fa-solid fa-basket-shopping" /></span></span>
           <span className="trust-pill">PayPal Sandbox Only</span>
         </div>
         <h1 className="headline">
@@ -51,8 +56,9 @@ export default function Welcome() {
         <p className="cta-note anim" style={{ "--d": "0.5s" } as React.CSSProperties}>
           No real money. <Link className="link" href="/about">How Soul Differs From PayPal</Link>
         </p>
-      </main>
-      <section className="stats" aria-label="This week at a glance">
+      </div>
+      <section className="stats" aria-label="From the prepared story">
+        {stats && <p className="stats-cap anim" style={{ "--d": "0.5s" } as React.CSSProperties}>From the Prepared Story</p>}
         {stats?.map((x, i) => (
           <div className="stat anim" key={x.label} style={{ "--d": `${0.5 + i * 0.08}s` } as React.CSSProperties}>
             <div className="stat-value">{x.v}</div>
@@ -60,6 +66,7 @@ export default function Welcome() {
           </div>
         ))}
       </section>
+      <Toast text={toast.text} />
     </>
   );
 }
