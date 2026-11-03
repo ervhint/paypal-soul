@@ -18,13 +18,13 @@ Words used here:
 
 Other terms (RLS, BFF, LCP, capture, sandbox …) are explained in the word list at the top of docs/PLAN.md.
 
-Latest run: 2026-11-03, U0: T-0.2 to T-0.7 and NF-4 ✅, T-0.1 runs on the U0 push.
+Latest run: 2026-11-03, U0: T-0.1 to T-0.7 and NF-4 ✅.
 
 ## Phase A: Setup
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-0.1 | AC-0.1 | ci | Push a commit to `main`. Open the Actions run. | `npm test`, `next build` and a gitleaks scan of the full history all run, and their pass or fail status shows on the commit. | ⏭ | |
+| T-0.1 | AC-0.1 | ci | Push a commit to `main`. Open the Actions run. | `npm test`, `next build` and a gitleaks scan of the full history all run, and their pass or fail status shows on the commit. | ✅ | 2026-11-03: run 41622230556 on 637ac12, `npm test`, `npm run build` and gitleaks passed, both checks show on the commit. The first run on 18abfa1 failed until `next typegen` was added |
 | T-0.2 | AC-0.2 | manual | After U0's commit, open each prototype route on localhost. Check the diff touches only CI and setup files. | Every route renders from the mock routes as before. | ✅ | 2026-11-03: all 11 routes 200 in Chrome, `/api/story`, `/api/memory`, `/api/connect` serve mock data, no console errors. No `app/` or `lib/` file changed |
 | T-0.3 | AC-0.3 | manual | Open AGENTS.md and PLAN.md §3. | AGENTS.md lists folders, BFF routes and env vars. §3 has the ER diagram and the RLS policies. | ✅ | 2026-11-03: AGENTS.md Architecture section, PLAN §3 ER diagram and RLS table |
 | T-0.4 | AC-0.4 | integration | Run the first migration on Staging. Query each personal table for RLS status. | RLS is on for every personal table. | ✅ | 2026-11-03: Staging `relrowsecurity` true on all 10 tables, 1 policy each, `anon` has no select grant |
