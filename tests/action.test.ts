@@ -3,10 +3,10 @@
 // keys (the BFF side of T-8.1 to T-8.4): order, capture once, new chapter, cancelled and expired orders.
 import type { CookieMethodsServer } from "@supabase/ssr";
 import { afterAll, describe, expect, it } from "vitest";
-import { createPurchase, newBrief, plainNew, readNew, settle, settleWaiting } from "@/lib/action";
+import { createPurchase, createSend, newBrief, plainNew, readNew, sendCategory, sendReason, settle, settleWaiting, suggestSends } from "@/lib/action";
 import { importAccount, leaveOutMadeInSoul, MADE_IN_SOUL, sortRows, type Sorted, type Store } from "@/lib/import";
 import type { AskJson } from "@/lib/llm";
-import type { Orders, PayPalOrder, PayPalTxn } from "@/lib/paypal";
+import { PayPalError, type NewOrder, type Orders, type PayPalOrder, type PayPalTxn } from "@/lib/paypal";
 import { readStory } from "@/lib/story";
 import { choosePrepared, preparedAccountId, secretClient, sessionClient } from "@/lib/supabase";
 import type { StoryPayment } from "@/lib/totals";
@@ -61,11 +61,11 @@ describe("the new chapter", () => {
     const brief = newBrief(market, [groceries, market, pay("2026-11-05", "Later", 9, "groceries")]);
     expect(brief).toEqual({
       payment: { ref: "p1", date: "Nov 4", amount: "$18.00", name: "Weekend market", category: "Groceries" },
-      figures: { firstTime: true, spentOnYouThisWeek: { payments: 2, spent: "$64.20" }, sameCategoryThisWeek: { category: "Groceries", payments: 2, spent: "$64.20" } },
+      figures: { firstTime: true, spentOnYourselfThisWeek: { payments: 2, spent: "$64.20" }, sameCategoryThisWeek: { category: "Groceries", payments: 2, spent: "$64.20" } },
     });
     // Groceries the person said were for their mum aren't spending on them.
     const forMum = newBrief(market, [{ ...groceries, for_who: "your mum" }, market]);
-    expect(forMum.figures).toEqual({ firstTime: true, spentOnYouThisWeek: { payments: 1, spent: "$18.00" } });
+    expect(forMum.figures).toEqual({ firstTime: true, spentOnYourselfThisWeek: { payments: 1, spent: "$18.00" } });
     expect(JSON.stringify(brief)).not.toContain("Test Store");
     expect(JSON.stringify(brief)).not.toContain(market.id);
   });
@@ -89,13 +89,15 @@ describe("the new chapter", () => {
 // A fake PayPal: orders wait until approved by the test, and each capture call is counted.
 function fakePayPal() {
   const orders = new Map<string, PayPalOrder>();
+  const made = new Map<string, NewOrder>();
   const calls = { create: 0, capture: 0 };
   let i = 0;
   const api: Orders = {
-    create: async () => {
+    create: async (o) => {
       calls.create++;
       const id = `TEST-ORDER-${Date.now()}-${++i}`;
       orders.set(id, { id, status: "CREATED" });
+      made.set(id, o);
       return { id, link: `https://www.sandbox.paypal.com/checkoutnow?token=${id}` };
     },
     get: async (id) => orders.get(id) ?? null,
@@ -106,12 +108,12 @@ function fakePayPal() {
         orders.set(id, {
           id,
           status: "COMPLETED",
-          purchase_units: [{ payments: { captures: [{ id: `CAP-${id}`, status: "COMPLETED", create_time: new Date().toISOString(), amount: { value: "18.00", currency_code: "USD" }, seller_receivable_breakdown: { paypal_fee: { value: "1.12" } } }] } }],
+          purchase_units: [{ payments: { captures: [{ id: `CAP-${id}`, status: "COMPLETED", create_time: new Date().toISOString(), amount: { value: made.get(id)?.amount ?? "18.00", currency_code: "USD" }, seller_receivable_breakdown: { paypal_fee: { value: made.get(id)?.payeeEmail ? "1.36" : "1.12" } } }] } }],
         });
       return orders.get(id)!;
     },
   };
-  return { api, orders, calls, approve: (id: string) => orders.set(id, { id, status: "APPROVED" }), forget: (id: string) => orders.delete(id) };
+  return { api, orders, made, calls, approve: (id: string) => orders.set(id, { id, status: "APPROVED" }), forget: (id: string) => orders.delete(id) };
 }
 
 function browser() {
@@ -218,5 +220,125 @@ describe("purchases on Staging", () => {
     expect(error).not.toBeNull();
     const { data } = await db().from("action").select("status").eq("id", a.id).single();
     expect(data?.status).toBe("waiting");
+  });
+});
+
+// Send money (U9). Unit: the suggestion under the support chapter, the reason, the category and the send's
+// chapter. Integration on Staging with a fake PayPal (the BFF side of T-9.1 to T-9.5).
+describe("send money suggestions (T-9.1)", () => {
+  type Ch = { id: string; claims: { paymentIds: string[] }[]; suggest?: { text: string; label: string; href: string } };
+  const ch = (id: string, ids: string[]): Ch => ({ id, claims: [{ paymentIds: ids }] });
+  const names = () => ["Weekly groceries"];
+
+  it("goes under the newest chapter with the support payments, once per belief, and not after it's sent", () => {
+    const chapters = [ch("new", ["x"]), ch("week2", ["g2", "c1"]), ch("week1", ["g1"])];
+    const mum = { id: "b1", who: "your mum", paymentIds: ["g1", "g2"] };
+    const out = suggestSends(chapters, [mum], names, new Set());
+    expect(out.map((c) => c.suggest?.label ?? null)).toEqual([null, "Review the Payment", null]);
+    expect(out[1].suggest).toEqual({
+      text: "You told me Weekly groceries are for your mum. Want to send your mum $25.00 towards the next one?",
+      label: "Review the Payment",
+      href: "/action/confirm?belief=b1",
+    });
+    expect(chapters[1]).not.toHaveProperty("suggest"); // the saved chapters aren't changed
+    expect(suggestSends(chapters, [mum], names, new Set(["b1"])).every((c) => !c.suggest)).toBe(true);
+    expect(suggestSends(chapters, [{ ...mum, paymentIds: ["gone"] }], names, new Set()).every((c) => !c.suggest)).toBe(true);
+  });
+
+  it("says why in the person's own terms, and files the send as support", () => {
+    expect(sendReason("Sam", ["Mobile data"])).toBe("You told me Mobile data is for Sam.");
+    expect(sendReason("your mum", ["Weekly groceries", "Bus fare", "Weekly groceries"])).toBe("You told me Weekly groceries and Bus fare are for your mum.");
+    expect(sendCategory("your mum")).toBe("family_needs.parents");
+    expect(sendCategory("your Mom")).toBe("family_needs.parents");
+    expect(sendCategory("Sam")).toBe("others.send_personal");
+    expect(sendCategory("a friend")).toBe("others.send_personal");
+  });
+
+  it("tells the LLM who the money went to, and code's own sentence says it", () => {
+    const sent = { ...pay("2026-11-05", "Sent to your mum", 25, "family_needs.parents"), for_who: "your mum" };
+    const groceries = { ...pay("2026-11-04", "Weekly groceries", 46.2, "groceries"), for_who: "your mum" };
+    const brief = newBrief(sent, [groceries, sent]);
+    // Who it went to and whether it's the first time; no category or spending figures to misread.
+    expect(brief).toEqual({ payment: { ref: "p1", date: "Nov 5", amount: "$25.00", name: "Sent to your mum", for: "your mum" }, figures: { firstTime: true } });
+    expect(plainNew(brief).claims).toEqual(["You sent $25.00 to your mum on Nov 5."]);
+  });
+
+  it("drops a sentence that calls someone he or she", () => {
+    const sent = { ...pay("2026-11-05", "Sent to your mum", 25, "family_needs.parents"), for_who: "your mum" };
+    const brief = newBrief(sent, [sent]);
+    const answer = (texts: string[]) => JSON.stringify({ title: "money for mum", claims: texts.map((text) => ({ text })) });
+    expect(readNew(answer(["You sent $25.00 to your mum on Nov 5.", "It's the first payment you've made to her."]), brief).claims).toEqual(["You sent $25.00 to your mum on Nov 5."]);
+    expect(readNew(answer(["You sent her $25.00 on Nov 5."]), brief)).toEqual(plainNew(brief));
+    expect(readNew(answer(["Here's something new: $25.00 to your mum, a first."]), brief).claims).toHaveLength(1); // "Here" isn't "her"
+  });
+});
+
+describe("send money on Staging", () => {
+  const sendAsk: AskJson = async (purpose) => {
+    if (purpose !== "new chapter") throw new Error("no LLM in this test");
+    return JSON.stringify({ title: "Money for Your Mum", claims: [{ text: "You sent $25.00 to your mum on Nov 5." }] });
+  };
+
+  async function withSupport() {
+    const db = browser();
+    const id = await choosePrepared(db(), null);
+    made.push(id);
+    const account = await preparedAccountId();
+    const { data: groceries } = await db().from("payment").select("id").eq("account_id", account).is("person_id", null).limit(2);
+    const { data: b, error } = await db()
+      .from("belief")
+      .insert({ person_id: id, account_id: account, kind: "support", key: "support:your mum", who: "your mum", text: "You buy the groceries for your mum.", sureness: "sure", source: "You Told Me", payment_ids: groceries!.map((g) => g.id), told_at: new Date().toISOString() })
+      .select("id, who, payment_ids")
+      .single();
+    if (error) throw error;
+    return { db, id, account, support: { id: b.id as string, who: b.who as string, paymentIds: b.payment_ids as string[] } };
+  }
+
+  it("pays the chosen sandbox account, captures once and joins the support and the story (T-9.2 to T-9.4)", async () => {
+    const admin = secretClient();
+    const paypal = fakePayPal();
+    const { db, id, account, support } = await withSupport();
+    const before = await readStory(db(), account);
+
+    const a = await createSend(admin, id, account, support, ["Weekly groceries"], "mum@personal.example.com", "http://localhost:3000", paypal.api);
+    expect(a).toMatchObject({ kind: "send", status: "waiting", recipient: "your mum", amount: 25, belief_id: support.id, payee_email: "mum@personal.example.com" });
+    expect(paypal.made.get(a.paypal_order_id!)).toMatchObject({ amount: "25.00", payeeEmail: "mum@personal.example.com", name: "Towards Weekly groceries" });
+    expect((await createSend(admin, id, account, support, ["Weekly groceries"], "mum@personal.example.com", "http://localhost:3000", paypal.api)).id).toBe(a.id);
+    expect(paypal.calls.create).toBe(1);
+
+    paypal.approve(a.paypal_order_id!);
+    const done = await settle(admin, a, paypal.api, sendAsk);
+    expect(done).toMatchObject({ status: "completed", paypal_txn_id: `CAP-${a.paypal_order_id}` });
+    expect(Number(done.fee)).toBe(1.36);
+
+    const { data: pays } = await admin.from("payment").select("id, person_id, amount, name, payee, category").eq("paypal_txn_id", done.paypal_txn_id!);
+    expect(pays).toEqual([{ id: expect.any(String), person_id: id, amount: 25, name: "Sent to your mum", payee: "mum@personal.example.com", category: "family_needs.parents" }]);
+    // Money for mum, kept apart from the support belief so the groceries' category doesn't carry over.
+    const { data: sent } = await admin.from("payment").select("for_who").eq("id", pays![0].id).single();
+    expect(sent!.for_who).toBe("your mum");
+    const { data: belief } = await db().from("belief").select("payment_ids").eq("id", support.id).single();
+    expect(belief!.payment_ids).toEqual(support.paymentIds);
+
+    const story = await readStory(db(), account);
+    expect(story.chapters[0]).toMatchObject({ title: "Money for Your Mum", fresh: true, claims: [{ paymentIds: [pays![0].id] }] });
+    expect(story.payments.find((p) => p.id === pays![0].id)).toMatchObject({ forWho: "support", amount: 25, category: "Parents" });
+    expect(story.summary.spent).toBe(before.summary.spent); // money for mum isn't spending on you
+  });
+
+  it("marks the send failed when PayPal won't make the order, with nothing in the story (T-9.5)", async () => {
+    const admin = secretClient();
+    const paypal = fakePayPal();
+    const { db, id, account, support } = await withSupport();
+    const refusing: Orders = { ...paypal.api, create: async () => Promise.reject(new Error("PAYEE_ACCOUNT_INVALID")) };
+    await expect(createSend(admin, id, account, support, ["Weekly groceries"], "nobody@example.com", "http://localhost:3000", refusing)).rejects.toThrow();
+    // PayPal makes the order for an unknown email, then refuses the capture: failed, not left waiting.
+    const a = await createSend(admin, id, account, support, ["Weekly groceries"], "nobody@example.com", "http://localhost:3000", paypal.api);
+    paypal.approve(a.paypal_order_id!);
+    const refused: Orders = { ...paypal.api, capture: async () => Promise.reject(new PayPalError(422, "PayPal capture returned 422 PAYEE_ACCOUNT_INVALID")) };
+    expect((await settle(admin, a, refused, sendAsk)).status).toBe("failed");
+    const { data: actions } = await db().from("action").select("kind, status").order("created_at");
+    expect(actions).toEqual([{ kind: "send", status: "failed" }, { kind: "send", status: "failed" }]);
+    const { data: mine } = await admin.from("payment").select("id").eq("person_id", id);
+    expect(mine).toEqual([]);
   });
 });

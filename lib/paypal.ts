@@ -80,7 +80,8 @@ export type PayPalOrder = {
     };
   }[];
 };
-export type NewOrder = { requestId: string; amount: string; currency: string; name: string; customId: string; returnUrl: string; cancelUrl: string };
+/** `payeeEmail` pays that sandbox account (send money, U9); without it the order pays `soul`'s business account. */
+export type NewOrder = { requestId: string; amount: string; currency: string; name: string; customId: string; returnUrl: string; cancelUrl: string; payeeEmail?: string };
 export type Orders = {
   create: (o: NewOrder) => Promise<{ id: string; link: string }>;
   /** null when PayPal no longer knows the order, so its link has run out. */
@@ -98,7 +99,7 @@ const soulHeaders = async (extra: Record<string, string> = {}) => ({
   ...extra,
 });
 
-/** Orders through the `soul` app, paid to its sandbox business account (Test Store). */
+/** Orders through the `soul` app, paid to its sandbox business account (Test Store) or to a payee's email. */
 export const paypalOrders: Orders = {
   create: async (o) => {
     const r = await fetch(`${base}/v2/checkout/orders`, {
@@ -109,6 +110,7 @@ export const paypalOrders: Orders = {
         purchase_units: [
           {
             custom_id: o.customId,
+            ...(o.payeeEmail ? { payee: { email_address: o.payeeEmail } } : {}),
             description: o.name,
             amount: { currency_code: o.currency, value: o.amount, breakdown: { item_total: { currency_code: o.currency, value: o.amount } } },
             items: [{ name: o.name, quantity: "1", unit_amount: { currency_code: o.currency, value: o.amount } }],

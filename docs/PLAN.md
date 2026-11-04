@@ -479,7 +479,7 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 1. Settled at G5: anonymous Supabase users for the private copy.
 2. Do daily subscription charges repeat? Check the prepared account on Nov 3–4. If they don't, the 7-day minimum isn't met by Nov 9 and the prepared story stays thin.
 3. Does the $1 send money test stay in the prepared story? It wasn't in the report rows when last checked.
-4. On prepared data, sending money needs the person's own sandbox login to approve. Which recipient is prefilled?
+4. On prepared data, sending money needs the person's own sandbox login to approve. Which recipient is prefilled? Answered in U9 (Nov 5): Soul's test account (the second sandbox personal account, `PAYPAL_SEND_RECIPIENT`), with another sandbox email as the other choice. The amount is $25.00, fixed on the server.
 5. Cancel subscription (U14) needs a check that consent covers it on another account.
 6. A second developer login is untested, to be tested before deployment finishes (reminder in PROGRESS.md).
 7. Supabase free projects pause after a week idle, and both slots go to Staging and Prod. The daily job pings, or use a paid plan.

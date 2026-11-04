@@ -22,7 +22,7 @@ function Done() {
       <Receipt stages={["Check", "Waiting", "Sent"]} now={2} amount={paid.amount} title={titleCase(`sent ${paid.title.replace(/^\S+ /, "")}`)}>
         <p className="lead">It&rsquo;s paid. I&rsquo;ve added it to your story and I&rsquo;ll remember it.</p>
         <ul className="deal">
-          <li><span>To</span><b>{paid.to}</b></li>
+          <li><span>To</span><b>{titleCase(paid.to)}{paid.email && <small className="sub">{paid.email}</small>}</b></li>
           <li><span>PayPal Fee</span><b>{money(fee)}</b></li>
           <li><span>They Received</span><b>{money(paid.amount - fee)}</b></li>
           <li><span>PayPal Transaction ID</span><b>{paid.txn}</b></li>

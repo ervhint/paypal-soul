@@ -1,8 +1,3 @@
-import type { Action } from "@/lib/action";
-import { titleCase } from "@/lib/title-case";
-
-export type { Action };
-
 // Prototype data. P6 replaces each function with the real PayPal sandbox + memory store behind the same API routes.
 export type Payment = { id: string; txn: string; item: string; payee: string; category: string; icon: string; amount: number; date: string; forWho: "you" | "support" };
 export type LeftOut = { txn: string; code: string; label: string; amount: number; date: string; why: string };
@@ -30,8 +25,6 @@ export type Change = { claimId: string; before: string; after: string; notes: st
 const seed = () => ({
   source: "prepared" as "prepared" | "own",
   connected: false,
-  who: "your mum",
-  actions: [] as Action[],
   corrected: false,
   change: null as Change | null,
   payments: [
@@ -89,48 +82,3 @@ export const snapshot = () => {
   const s = db();
   return { ...s, summary: summary(s) };
 };
-
-const sendMoney = (txn: string) => {
-  const s = db();
-  s.payments.push({ id: "P-1048", txn, payee: s.who, category: "Family support", item: `Sent to ${s.who}`, icon: "paper-plane", amount: 25, date: "Nov 2", forWho: "support" });
-  s.chapters.unshift({
-    id: "ch-sent",
-    title: `You Sent ${titleCase(s.who)} $25.00`,
-    when: "Just Now",
-    fresh: true,
-    claims: [{ id: "c6", text: `You sent $25.00 towards ${s.who}'s groceries. This is the first time I helped move money, and I'll remember it.`, paymentIds: ["P-1048"] }],
-  });
-  s.chapters.forEach((c) => {
-    if (c.id !== "ch-sent") {
-      c.fresh = false;
-      delete c.suggest;
-    }
-  });
-};
-
-// Send money only: purchases are real since U8 (lib/action.ts).
-export function createAction(kind: "send", to?: string) {
-  const s = db();
-  const open = s.actions.find((a) => a.kind === kind && a.status === "waiting");
-  if (open) return open;
-  const done = s.actions.find((a) => a.kind === kind && a.status === "completed");
-  if (done) return done;
-  const id = `A-${s.actions.length + 1}`;
-  const action: Action = { id, kind, status: "waiting", title: `$25.00 to ${s.who}`, to: to ?? "", amount: 25 };
-  s.actions.push(action);
-  return action;
-}
-
-// Only a completed payment joins the story. P6 completes approved orders on return, on open and in the daily job.
-export function settleAction(id: string, outcome: "completed" | "cancelled" | "expired") {
-  const s = db();
-  const a = s.actions.find((x) => x.id === id);
-  if (!a || a.status !== "waiting") return a;
-  a.status = outcome;
-  if (outcome !== "completed") return a;
-  a.txn = "4UP17093XW6628450";
-  // Prototype figure in the shape of the Nov 2 test ($1.00 paid, $0.52 fee). P6 shows the fee PayPal returns.
-  a.fee = Math.round((a.amount * 0.0349 + 0.49) * 100) / 100;
-  sendMoney(a.txn);
-  return a;
-}

@@ -7,8 +7,6 @@ import { Empty, Receipt, Skeleton, Toast, useToast } from "@/components/ui";
 import { titleCase } from "@/lib/title-case";
 import type { Action } from "@/lib/action";
 
-const small = { fontSize: 13.5 };
-
 function Status() {
   const params = useSearchParams();
   const id = params.get("id");
@@ -21,14 +19,9 @@ function Status() {
 
   useEffect(() => {
     if (data?.status === "completed") router.replace(data.kind === "send" ? `/action/done?id=${data.id}` : "/story");
-    if (data?.status === "failed") router.replace(`/action/failed?kind=${data.kind}`);
+    if (data?.status === "failed") router.replace(`/action/failed?kind=${data.kind}&why=declined${data.belief ? `&belief=${data.belief}` : ""}`);
   }, [data, router]);
 
-  // The prototype's send money until U9.
-  const settle = async (outcome: "completed" | "cancelled" | "expired") => {
-    const r = await fetch("/api/action", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, outcome }) });
-    setData(await r.json());
-  };
   const check = async () => {
     setChecking(true);
     const a: Action | null = await fetch(`/api/action?id=${id}`, { cache: "no-store" }).then((r) => r.json()).catch(() => data);
@@ -58,6 +51,7 @@ function Status() {
 
   const stages = (middle: string) => ["Check", middle, data.kind === "send" ? "Sent" : "Added"];
   const what = data.title.replace(/^\S+ /, "");
+  const again = data.kind === "buy" ? "/buy" : data.belief ? `/action/confirm?belief=${data.belief}` : "/story";
 
   if (data.status === "cancelled" || data.status === "expired")
     return (
@@ -65,7 +59,7 @@ function Status() {
         <Receipt stages={stages(data.status === "cancelled" ? "Cancelled" : "Link Ran Out")} now={1} bad amount={data.amount} title={data.status === "cancelled" ? "Cancelled on PayPal" : "That Link Has Run Out"}>
           <p className="lead">{data.title} wasn&rsquo;t paid. Nothing moved, and your story hasn&rsquo;t changed.</p>
           <div className="row" style={{ marginTop: 24 }}>
-            <Link className="btn" href={data.kind === "buy" ? "/buy" : "/action/confirm"}>Start Again</Link>
+            <Link className="btn" href={again}>Start Again</Link>
             <Link className="btn dark" href="/story">Back to My Story</Link>
           </div>
         </Receipt>
@@ -78,7 +72,7 @@ function Status() {
       <Receipt stages={stages("Waiting")} now={1} amount={data.amount} title={titleCase(what)}>
         <p className="lead">Pay on PayPal with your own sandbox login, not your real PayPal login. You don&rsquo;t have to wait here: I&rsquo;ll add it to your story once it&rsquo;s paid.</p>
         <ul className="deal">
-          <li><span>To</span><b>{data.to}</b></li>
+          <li><span>To</span><b>{titleCase(data.to)}{data.email && <small className="sub">{data.email}</small>}</b></li>
         </ul>
         <div className="row" style={{ marginTop: 24 }}>
           {data.link && (
@@ -91,12 +85,6 @@ function Status() {
         </div>
       </Receipt>
       <p className="note">No sandbox login? Nothing moves, and you can keep reading and correcting your story.</p>
-      {data.kind === "send" && <p className="note">
-        Prototype, what PayPal could report:{" "}
-        <button className="link" style={small} onClick={() => settle("completed")}>Paid</button>{" · "}
-        <button className="link" style={small} onClick={() => settle("cancelled")}>Cancelled</button>{" · "}
-        <button className="link" style={small} onClick={() => settle("expired")}>Link Ran Out</button>
-      </p>}
       <Toast text={toast.text} />
     </div>
   );

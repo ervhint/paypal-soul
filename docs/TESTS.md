@@ -106,11 +106,11 @@ Latest run: 2026-11-04, U8: T-8.1 to T-8.5 ✅. Before that, U1: T-1.1 to T-1.5 
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-9.1 | AC-9.1 | e2e golden | After the groceries correction, open `/story`. | The chapter suggests sending money with a Review the Payment button. | ⏭ | |
-| T-9.2 | AC-9.2 | e2e golden | Click the suggestion. Open `/action/confirm`. | The page shows the recipient and the amount, and says money moves only after approval on PayPal. | ⏭ | |
-| T-9.3 | AC-9.3 | e2e golden | Approve on PayPal sandbox. Open `/action/done`. | The page shows the recipient, the amount, the real fee and the PayPal transaction ID. | ⏭ | |
-| T-9.4 | AC-9.4 | e2e golden | Open `/story` after the send. | The completed send appears in the story. | ⏭ | |
-| T-9.5 | AC-9.5 | e2e | Make the order or capture fail. Open `/action/failed`. Click Retry. | The page says nothing moved and offers Retry. Retry returns to the confirm step. | ⏭ | |
+| T-9.1 | AC-9.1 | e2e golden | After the groceries correction, open `/story`. | The chapter suggests sending money with a Review the Payment button. | ✅ | Chrome Nov 5: Review the Payment under the groceries week, code's text; gone after the send. Unit + Staging tests |
+| T-9.2 | AC-9.2 | e2e golden | Click the suggestion. Open `/action/confirm`. | The page shows the recipient and the amount, and says money moves only after approval on PayPal. | ✅ | Chrome Nov 5: Send to Your Mum?, $25.00, Soul's Test Account with its email, approval note |
+| T-9.3 | AC-9.3 | e2e golden | Approve on PayPal sandbox. Open `/action/done`. | The page shows the recipient, the amount, the real fee and the PayPal transaction ID. | ✅ | Chrome Nov 5, user approved: To Your Mum, fee $1.36, received $23.64, ID 3BT01006AB8592800 |
+| T-9.4 | AC-9.4 | e2e golden | Open `/story` after the send. | The completed send appears in the story. | ✅ | Chrome Nov 5: New chapter Sending Money to Mum, Parents, counted for mum, Spent on You stays $81.00; week chapter mentions it |
+| T-9.5 | AC-9.5 | e2e | Make the order or capture fail. Open `/action/failed`. Click Retry. | The page says nothing moved and offers Retry. Retry returns to the confirm step. | ✅ (BFF) | Staging tests: order refused and capture refused (422) both end failed with no payment. PayPal accepts an unknown payee email at order time. Failed page Try Again links to confirm. Not forced live |
 
 ## Phase F: Own sandbox and data control
 
@@ -171,10 +171,10 @@ One click-through in this order. Run it at both widths.
 | 6 | T-7.1 | Ask about the groceries on `/chat`. Answer uses the correction and cites payments. | ✅ | ⏭ |
 | 7 | T-8.1 | Pay on `/buy`. Status page shows the PayPal link, action waiting. | ✅ | ⏭ |
 | 8 | T-8.3 | After approval, `/story` shows a new chapter marked new. | ✅ | ⏭ |
-| 9 | T-9.1 | Chapter suggests sending money, with a label. | ⏭ | ⏭ |
-| 10 | T-9.2 | Confirm page shows recipient, amount and the approval note. | ⏭ | ⏭ |
-| 11 | T-9.3 | Done page shows recipient, amount, real fee and transaction ID. | ⏭ | ⏭ |
-| 12 | T-9.4 | `/story` shows the completed send. | ⏭ | ⏭ |
+| 9 | T-9.1 | Chapter suggests sending money, with a label. | ✅ | ⏭ |
+| 10 | T-9.2 | Confirm page shows recipient, amount and the approval note. | ✅ | ⏭ |
+| 11 | T-9.3 | Done page shows recipient, amount, real fee and transaction ID. | ✅ | ⏭ |
+| 12 | T-9.4 | `/story` shows the completed send. | ✅ | ⏭ |
 
 ## Questions for the plan
 
