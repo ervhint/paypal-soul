@@ -77,6 +77,20 @@ export function categoryLabel(id: string | null) {
   return c[1] && c[1] !== c[2] ? `${c[1]} → ${c[2]}` : c[2];
 }
 
+// Font Awesome icons by group, with a few categories that need their own.
+const ICONS: Record<string, string> = {
+  Bills: "file-invoice", Education: "graduation-cap", "Family Needs": "people-roof", "Food & Drinks": "mug-hot",
+  "Gift & Charity": "gift", Groceries: "basket-shopping", "Health & Personal Care": "heart-pulse", "Hobby & Entertainment": "star",
+  Loans: "landmark", Others: "paper-plane", "Savings & Investment": "piggy-bank", Shopping: "bag-shopping", Sports: "dumbbell",
+  Transportation: "bus", Traveling: "plane", "bills.mobile_data": "signal", "food_drinks.daily_meal": "utensils", mixed: "layer-group",
+};
+
+/** The short name and icon a payment row shows, e.g. "Snacks & Drinks" with a mug. */
+export function categoryView(id: string | null) {
+  const c = LIST.find((c) => c[0] === id) ?? LIST.at(-1)!;
+  return { name: c[2], icon: ICONS[c[0]] ?? (c[1] ? ICONS[c[1]] : undefined) ?? "circle-question" };
+}
+
 /** How Soul names a payment in a sentence. */
 export const paymentName = (p: { name: string | null; category: string | null }) => (p.category === "unknown" || !p.name ? UNKNOWN_PAYMENT : p.name);
 

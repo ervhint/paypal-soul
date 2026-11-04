@@ -1,15 +1,17 @@
 import { syncAccount } from "@/lib/import";
+import { askJson } from "@/lib/llm";
 import { requestDb } from "@/lib/session";
+import { buildStory } from "@/lib/story";
 import { currentVisitor } from "@/lib/supabase";
 
-// Refresh From PayPal: reads only past the account's cursor. Runs on opening the story and on Refresh.
+// Refresh From PayPal: reads only past the account's cursor, then brings this person's story up to date.
+// Runs on opening the story and on Refresh. The story is rebuilt from saved payments even when PayPal fails.
 export async function POST() {
-  const v = await currentVisitor(await requestDb());
+  const db = await requestDb();
+  const v = await currentVisitor(db);
   if (!v?.accountId) return Response.json({ ok: false, error: "Choose the data to read first." }, { status: 409 });
-  try {
-    return Response.json({ ok: true, ...(await syncAccount(v.accountId)) });
-  } catch (e) {
-    console.error("sync failed", e);
-    return Response.json({ ok: false, error: "PayPal isn't answering right now." }, { status: 502 });
-  }
+  const synced = await syncAccount(v.accountId).catch((e) => (console.error("sync failed", e), null));
+  const story = await buildStory(db, v.id, v.accountId, askJson).catch((e) => (console.error("story failed", e), null));
+  if (!synced) return Response.json({ ok: false, error: "PayPal isn't answering right now.", story }, { status: 502 });
+  return Response.json({ ok: true, ...synced, story });
 }

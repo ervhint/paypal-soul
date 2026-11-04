@@ -148,6 +148,7 @@ a { color: inherit; text-decoration: none; }
 .tag.plain { background: transparent; color: var(--soft); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4); }
 .rail-stat b.hot { color: var(--mark); }
 .chapter.fresh { animation: rise 0.8s var(--ease) backwards; }
+.read > .older { align-self: flex-start; margin-top: -24px; }
 .rail { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 20px; }
 .rail-links { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 .rail-links .link { text-align: left; font-size: 13.5px; }

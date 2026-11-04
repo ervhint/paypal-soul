@@ -23,7 +23,7 @@ export const askJson: AskJson = async (purpose, system, user) => {
   });
   if (!r.ok) throw new LlmError(`OpenRouter returned ${r.status}`);
   const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens: number; completion_tokens: number; cost?: number } };
-  console.info("llm", purpose, MODEL, { in: j.usage?.prompt_tokens, out: j.usage?.completion_tokens, usd: j.usage?.cost });
+  console.info(`llm ${purpose} ${MODEL} in=${j.usage?.prompt_tokens} out=${j.usage?.completion_tokens} usd=${j.usage?.cost}`); // one string, so the dev log file keeps it
   const text = j.choices?.[0]?.message?.content;
   // Some answers come wrapped in a ```json fence even with response_format, so keep the outer object.
   const start = text?.indexOf("{") ?? -1;

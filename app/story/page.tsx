@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { post, useApi } from "@/lib/use-api";
 import { Empty, PaymentRow, Sheet, Skeleton, Toast, money, useToast } from "@/components/ui";
@@ -33,21 +33,22 @@ function StoryView() {
   const [busy, setBusy] = useState(false);
   const [seen, setSeen] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [older, setOlder] = useState(false);
   const toast = useToast();
 
   // The saved story shows at once; new payments are read from PayPal behind it. Returns how many came in, or null when PayPal fails.
   const runSync = useCallback(async () => {
     setSync("syncing");
     const r = await fetch("/api/sync", { method: "POST" }).then((r) => r.json()).catch(() => null);
-    if (!r?.ok) {
-      setSync("offline");
-      return null;
-    }
-    setSync("idle");
-    await reload();
-    return r.added as number;
+    setSync(r?.ok ? "idle" : "offline");
+    await reload(); // the story may have been rewritten from saved payments even when PayPal failed
+    return r?.ok ? (r.added as number) : null;
   }, [reload]);
+  // Once per open: development runs effects twice, and each sync may cost an LLM call.
+  const opened = useRef(false);
   useEffect(() => {
+    if (opened.current) return;
+    opened.current = true;
     runSync();
   }, [runSync]);
   const state = (demo === "syncing" || demo === "offline" ? demo : null) ?? sync;
@@ -74,6 +75,7 @@ function StoryView() {
       setQuestion(r);
       return setStep("ask");
     }
+    if (r.status === "error") return toast.show(r.message);
     close();
     setSeen(false);
     await reload();
@@ -105,8 +107,11 @@ function StoryView() {
       </div>
     );
 
-  const check = data.memory.find((m) => m.kind === "check" && m.active);
-  const checkClaim = data.chapters.flatMap((c) => c.claims).find((c) => c.belief === check?.id);
+  // The first belief Soul isn't sure of in the newest chapter, so the person can check it.
+  const unsure = new Map(data.memory.filter((m) => m.sure === "Not Sure").map((m) => [m.id, m]));
+  const checkClaim = data.chapters[0]?.claims.find((c) => c.belief && unsure.has(c.belief));
+  const check = checkClaim && unsure.get(checkClaim.belief!);
+  const shown = older ? data.chapters : data.chapters.slice(0, 5);
   const open = (c: Claim) => {
     setClaim(c);
     setStep("evidence");
@@ -135,7 +140,21 @@ function StoryView() {
             <button className="btn dark small" onClick={runSync}>Retry</button>
           </div>
         )}
-        {data.chapters.map((ch, i) => (
+        {!data.chapters.length && state === "syncing" && (
+          <div role="status" aria-label="Writing your story">
+            <p className="eyebrow">Writing Your Story…</p>
+            <Skeleton lines={1} tall />
+            <Skeleton lines={4} />
+          </div>
+        )}
+        {!data.chapters.length && state !== "syncing" && (
+          <div className="panel offline" role="status">
+            <h2>I Couldn&rsquo;t Write Your Story Yet</h2>
+            <p>Your payments are saved, but I couldn&rsquo;t turn them into chapters just now. Try again in a moment.</p>
+            <button className="btn dark small" onClick={runSync}>Retry</button>
+          </div>
+        )}
+        {shown.map((ch, i) => (
           <article key={ch.id} className={`chapter${ch.fresh ? " fresh" : ""}`}>
             <p className="eyebrow">
               {ch.fresh && <span className="tag">New</span>}
@@ -165,11 +184,11 @@ function StoryView() {
                   </div>
                 </details>
               )}
-            {check && checkClaim && ch.claims.includes(checkClaim) && (
+            {check && checkClaim && i === 0 && (
               <div className="check-note">
                 <span className="tag plain">Not Sure</span>
                 <h2>{check.text}</h2>
-                <p>I&rsquo;m guessing from two payments. Check them for me.</p>
+                <p>I&rsquo;m only guessing from {check.source.toLowerCase()} so far. Check them for me.</p>
                 <button className="btn dark small" onClick={() => open(checkClaim)}>Check the Payments</button>
               </div>
             )}
@@ -181,7 +200,10 @@ function StoryView() {
             )}
           </article>
         ))}
-        <p className="note" style={{ marginTop: -24 }}>Tap any sentence to see the payments behind it.</p>
+        {data.chapters.length > shown.length && (
+          <button className="btn line older" onClick={() => setOlder(true)}>Show Older Chapters</button>
+        )}
+        {!!data.chapters.length && <p className="note" style={{ marginTop: -24 }}>Tap any sentence to see the payments behind it.</p>}
       </div>
 
       <aside className="rail" aria-label="This week">

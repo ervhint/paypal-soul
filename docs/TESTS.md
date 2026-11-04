@@ -60,12 +60,12 @@ Latest run: 2026-11-04, U1: T-1.1 to T-1.5 ✅. Before that, 2026-11-03, U0: T-0
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-4.1 | AC-4.1 | unit | Build a story from categorised payments with a mocked LLM. | Totals and repeats come from code. The LLM prompt holds only those figures and the payments. | ⏭ | |
-| T-4.2 | AC-4.2 | e2e golden | Open `/story`. | The newest chapter is open and shows what Soul noticed. | ⏭ | |
-| T-4.3 | AC-4.3 | unit | Build stories where one name repeats on 2, 3, 5 and 10 days, and one daily subscription. | 2 days: no habit. 3 days: Not Sure. 5 days: Fairly Sure. 10 days and the subscription: Sure. | ⏭ | |
-| T-4.4 | AC-4.4 | e2e golden | On `/story`, tap a sentence. | The evidence sheet lists its payments with date, amount and PayPal transaction ID. | ⏭ | |
-| T-4.5 | AC-4.5 | e2e | Seed 6 chapters for a test person. Open `/story`. Click Show Older Chapters. | 5 chapters show first. The button then loads the rest. | ⏭ | |
-| T-4.6 | AC-4.6 | unit | Return an LLM chapter with one sentence that has no payment behind it. Save the story. | That sentence is dropped. The others stay. | ⏭ | |
+| T-4.1 | AC-4.1 | unit | Build a story from categorised payments with a mocked LLM. | Totals and repeats come from code. The LLM prompt holds only those figures and the payments. | ✅ | `tests/story.test.ts`, `tests/totals.test.ts` 2026-11-04: spending in cents, money received apart, totals by category, repeats and weeks (Monday, UTC) from code; the prompt holds those figures and the payments (ref, date, amount, name, category) only, with no IDs, PayPal IDs, payees or event codes; a sentence with an amount code never gave is dropped |
+| T-4.2 | AC-4.2 | e2e golden | Open `/story`. | The newest chapter is open and shows what Soul noticed. | ✅ | Chrome on localhost 2026-11-04, prepared data: the newest chapter "Groceries, Coffee and Bus Fares" (Nov 2 – Nov 3 · What I Noticed First) opens with the week's biggest spend, $46.20 groceries; rail shows 9 payments and $83.95 spent, which match Staging |
+| T-4.3 | AC-4.3 | unit | Build stories where one name repeats on 2, 3, 5 and 10 days, and one daily subscription. | 2 days: no habit. 3 days: Not Sure. 5 days: Fairly Sure. 10 days and the subscription: Sure. | ✅ | `tests/totals.test.ts` 2026-11-04: 2 days no habit, 3 Not Sure, 5 Fairly Sure, 10 Sure; a daily subscription on 3 days in a row is Sure; a weekly subscription or a daily one-off payment isn't daily; days are counted, not payments; unknown payments never repeat. Live: coffee and bus fare are on 2 days so far, so no habit yet |
+| T-4.4 | AC-4.4 | e2e golden | On `/story`, tap a sentence. | The evidence sheet lists its payments with date, amount and PayPal transaction ID. | ✅ | Chrome on localhost 2026-11-04: tapping the coffee sentence lists 3 payments, each with date, Test Store, Snacks & Drinks, $4.50 and its PayPal ID |
+| T-4.5 | AC-4.5 | e2e | Seed 6 chapters for a test person. Open `/story`. Click Show Older Chapters. | 5 chapters show first. The button then loads the rest. | ✅ | Chrome on localhost 2026-11-04: 5 chapters seeded on Staging for the test person, plus the written one: 5 show with Show Older Chapters, the button shows all 6 and goes. Same at 375px (in a 375px iframe, no sideways scroll) |
+| T-4.6 | AC-4.6 | unit | Return an LLM chapter with one sentence that has no payment behind it. Save the story. | That sentence is dropped. The others stay. | ✅ | `tests/story.test.ts` 2026-11-04: sentences with no payments, unknown refs or no list are dropped, the rest stay; a chapter with no sentence left isn't saved; an unusable answer saves nothing and the week is tried on the next sync |
 
 ## Phase C: Correct Soul
 
@@ -164,8 +164,8 @@ One click-through in this order. Run it at both widths.
 | Step | Test | Action and expected | 1440px | 375px |
 | --- | --- | --- | --- | --- |
 | 1 | T-1.1 | Click Try It With Our Prepared Data. Story opens, no login. | ⏭ | ⏭ |
-| 2 | T-4.2 | Newest chapter is open with what Soul noticed. | ⏭ | ⏭ |
-| 3 | T-4.4 | Tap a sentence. Evidence sheet shows date, amount and transaction ID. | ⏭ | ⏭ |
+| 2 | T-4.2 | Newest chapter is open with what Soul noticed. | ✅ | ✅ |
+| 3 | T-4.4 | Tap a sentence. Evidence sheet shows date, amount and transaction ID. | ✅ | ⏭ |
 | 4 | T-5.1 | Correct the groceries sentence. Chapter rewrites, changed sentence is pink. | ⏭ | ⏭ |
 | 5 | T-5.2 | Here's What Changed lists old and new sentence and totals. | ⏭ | ⏭ |
 | 6 | T-7.1 | Ask about the groceries on `/chat`. Answer uses the correction and cites payments. | ⏭ | ⏭ |

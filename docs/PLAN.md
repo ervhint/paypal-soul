@@ -126,7 +126,7 @@ Also near: [Salah](https://salah-liart.vercel.app/#/overview), merchant intellig
 | NF-13 | The demo stays up and free to use until Dec 15, 2026 | Daily job keeps Supabase awake, checked in P7 |
 
 ## 3. Data entities
-Schema: `supabase/migrations/20261103102320_init.sql` (U0, applied to Staging). No PayPal keys or tokens anywhere, only the PayPal account ID (NF-5).
+Schema: `supabase/migrations/20261103102320_init.sql` (U0) and `20261104092447_story.sql` (U4: a chapter's week and the payments it covered, a belief's key), both applied to Staging. No PayPal keys or tokens anywhere, only the PayPal account ID (NF-5).
 
 | Entity | Holds | Owner |
 | --- | --- | --- |
@@ -197,6 +197,7 @@ erDiagram
     uuid person_id FK
     uuid account_id FK
     text kind
+    text key
     text text
     text sureness
     uuid_array payment_ids
@@ -209,6 +210,8 @@ erDiagram
     text title
     date starts_on
     date ends_on
+    date week
+    uuid_array payment_ids
     bool is_new
     jsonb suggestion
   }
