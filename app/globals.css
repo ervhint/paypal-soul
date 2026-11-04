@@ -135,6 +135,8 @@ a { color: inherit; text-decoration: none; }
 /* Story (S-02) */
 .story { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: clamp(32px, 6vw, 80px); align-items: start; }
 .read { display: flex; flex-direction: column; gap: 56px; }
+.read > .syncing { margin-bottom: -36px; }
+.panel.offline .btn { margin-top: 16px; }
 .chapter h1, .chapter h2 { margin-top: 12px; font-size: clamp(32px, 4.6vw, 54px); }
 .chapter h2 { font-size: clamp(26px, 3.4vw, 38px); }
 .prose { margin-top: 20px; font-size: clamp(18px, 2vw, 21px); line-height: 1.7; color: var(--soft); max-width: 36em; }

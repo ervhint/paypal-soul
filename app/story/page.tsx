@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { post, useApi } from "@/lib/use-api";
 import { Empty, PaymentRow, Sheet, Skeleton, Toast, money, useToast } from "@/components/ui";
@@ -15,12 +15,17 @@ type Story = {
   memory: Memory[];
   change: Change | null;
   summary: { payments: number; spent: number; habits: number; checks: number };
+  syncedThrough: string | null;
 };
 type Step = "evidence" | "correct" | "ask";
 
+const saved = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
 function StoryView() {
-  const demo = useSearchParams().get("state"); // prototype only: syncing | offline | empty
+  const param = useSearchParams().get("state"); // development only, to see a state on demand: syncing | offline | empty
+  const demo = process.env.NODE_ENV === "development" ? param : null;
   const { data, reload } = useApi<Story>("/api/story");
+  const [sync, setSync] = useState<"idle" | "syncing" | "offline">("idle");
   const [claim, setClaim] = useState<Claim | null>(null);
   const [step, setStep] = useState<Step>("evidence");
   const [text, setText] = useState("");
@@ -28,15 +33,29 @@ function StoryView() {
   const [busy, setBusy] = useState(false);
   const [seen, setSeen] = useState(false);
   const [missing, setMissing] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const toast = useToast();
+
+  // The saved story shows at once; new payments are read from PayPal behind it. Returns how many came in, or null when PayPal fails.
+  const runSync = useCallback(async () => {
+    setSync("syncing");
+    const r = await fetch("/api/sync", { method: "POST" }).then((r) => r.json()).catch(() => null);
+    if (!r?.ok) {
+      setSync("offline");
+      return null;
+    }
+    setSync("idle");
+    await reload();
+    return r.added as number;
+  }, [reload]);
+  useEffect(() => {
+    runSync();
+  }, [runSync]);
+  const state = (demo === "syncing" || demo === "offline" ? demo : null) ?? sync;
 
   const closeMissing = useCallback(() => setMissing(false), []);
   const refresh = async () => {
-    setRefreshing(true);
-    await reload(); // P6: imports new payments from PayPal first
-    setRefreshing(false);
-    toast.show("Up to Date With PayPal");
+    const added = await runSync();
+    if (added !== null) toast.show(added ? `${added} New Payment${added > 1 ? "s" : ""} From PayPal` : "Up to Date With PayPal");
   };
 
   const close = useCallback(() => {
@@ -62,15 +81,6 @@ function StoryView() {
     toast.show("Chapter Rewritten");
   };
 
-  if (demo === "syncing")
-    return (
-      <div className="wrap" style={{ maxWidth: 640 }}>
-        <p className="eyebrow">Reading Your Sandbox Payments…</p>
-        <Skeleton lines={1} tall />
-        <Skeleton lines={4} />
-        <p className="note">This takes a few seconds the first time. Nothing is shown until I can point to a payment.</p>
-      </div>
-    );
   if (demo === "empty" || (data && data.payments.length === 0))
     return (
       <div className="wrap">
@@ -115,10 +125,14 @@ function StoryView() {
   return (
     <div className="wrap story">
       <div className="read">
-        {demo === "offline" && (
-          <div className="panel" role="status">
+        {state === "syncing" && (
+          <p className="eyebrow syncing" role="status">Reading New Payments From PayPal…</p>
+        )}
+        {state === "offline" && (
+          <div className="panel offline" role="status">
             <h2>PayPal Isn&rsquo;t Answering Right Now</h2>
-            <p>This is the story I saved this morning. It may be missing newer payments. I&rsquo;ll catch up when PayPal is back.</p>
+            <p>This is the story I saved{data.syncedThrough ? ` up to ${saved(data.syncedThrough)}` : " last time"}. It may be missing newer payments. I&rsquo;ll catch up when PayPal is back.</p>
+            <button className="btn dark small" onClick={runSync}>Retry</button>
           </div>
         )}
         {data.chapters.map((ch, i) => (
@@ -186,7 +200,7 @@ function StoryView() {
         ))}
         <Link className="btn line" href="/buy">Make a Sandbox Purchase</Link>
         <div className="rail-links">
-          <button className="link" disabled={refreshing} onClick={refresh}>{refreshing ? "Reading PayPal…" : "Refresh From PayPal"}</button>
+          <button className="link" disabled={state === "syncing"} onClick={refresh}>{state === "syncing" ? "Reading PayPal…" : "Refresh From PayPal"}</button>
           <button className="link" onClick={() => setMissing(true)}>Why Are Some Rows Missing?</button>
         </div>
       </aside>

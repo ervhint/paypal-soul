@@ -36,7 +36,7 @@ describe("entry and private copy", () => {
     expect(user.user?.is_anonymous).toBe(true);
     const { data: person } = await a.db().from("person").select("account_id").single();
     expect(person?.account_id).toBe(await preparedAccountId());
-    expect(await currentVisitor(a.db())).toEqual({ id: a.id, source: "prepared", connected: false });
+    expect(await currentVisitor(a.db())).toEqual({ id: a.id, accountId: await preparedAccountId(), source: "prepared", connected: false });
   });
 
   it("brings the same person back from the same cookies (T-1.3)", async () => {

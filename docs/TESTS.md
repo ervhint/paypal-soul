@@ -44,12 +44,12 @@ Latest run: 2026-11-04, U1: T-1.1 to T-1.5 ✅. Before that, 2026-11-03, U0: T-0
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-2.1 | AC-2.1 | unit | Run the first import on a mocked prepared account with 6 months of rows. | Every PayPal request spans 31 days or less, the range covers up to 6 months, and each kept row is saved once. | ⏭ | |
-| T-2.2 | AC-2.2 | unit | Import rows with codes T1900 and T0300. | Both rows go to the rows left out with a reason, and no total counts them. | ⏭ | |
-| T-2.3 | AC-2.3 | unit | Import once, then run Refresh From PayPal logic again. | Only rows newer than the cursor are requested. | ⏭ | |
-| T-2.4 | AC-2.4 | e2e | Open `/story` while an import runs (`/story?state=syncing`). | The saved story shows with a syncing state. | ⏭ | |
-| T-2.5 | AC-2.5 | e2e | Make PayPal return an error. Open `/story` (`?state=offline`). Click Retry. | The last saved story shows with the offline notice and a Retry button. Retry starts a new read. | ⏭ | |
-| T-2.6 | AC-2.6 | e2e | On `/story`, click Why Are Some Rows Missing? | The sheet lists each left-out row with code, amount, date and reason. | ⏭ | |
+| T-2.1 | AC-2.1 | unit | Run the first import on a mocked prepared account with 6 months of rows. | Every PayPal request spans 31 days or less, the range covers up to 6 months, and each kept row is saved once. | ✅ | tests/import.test.ts; live: 9 payments saved from the prepared buyer, a second sync added 0 |
+| T-2.2 | AC-2.2 | unit | Import rows with codes T1900 and T0300. | Both rows go to the rows left out with a reason, and no total counts them. | ✅ | tests/import.test.ts; live: 1 T1900 and 9 T0300 rows left out with reasons |
+| T-2.3 | AC-2.3 | unit | Import once, then run Refresh From PayPal logic again. | Only rows newer than the cursor are requested. | ✅ | tests/import.test.ts |
+| T-2.4 | AC-2.4 | e2e | Open `/story` while an import runs (`/story?state=syncing`). | The saved story shows with a syncing state. | ✅ | Chrome 2026-11-04: saved story with "Reading New Payments From PayPal…" (forced with `?state=syncing`, development only); real sync on open seen as POST /api/sync 200 |
+| T-2.5 | AC-2.5 | e2e | Make PayPal return an error. Open `/story` (`?state=offline`). Click Retry. | The last saved story shows with the offline notice and a Retry button. Retry starts a new read. | ✅ | Chrome 2026-11-04: offline notice with the saved time and Retry over the saved story (forced with `?state=offline`, development only). Retry calls the same sync; a real PayPal outage not simulated |
+| T-2.6 | AC-2.6 | e2e | On `/story`, click Why Are Some Rows Missing? | The sheet lists each left-out row with code, amount, date and reason. | ✅ | Chrome 2026-11-04: sheet lists the 10 real rows with code, amount, date, reason and PayPal ID |
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |

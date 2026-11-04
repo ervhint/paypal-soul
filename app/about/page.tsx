@@ -50,7 +50,7 @@ export default function AboutPage() {
         </section>
         <section>
           <h2>Demo Controls</h2>
-          <p>Preview the story: <a className="link" href="/story?state=syncing">Syncing</a> · <a className="link" href="/story?state=offline">PayPal Unavailable</a> · <a className="link" href="/story?state=empty">No Payments</a>. Preview connecting: <a className="link" href="/connect?state=pending">Not Approved Yet</a> · <a className="link" href="/connect?state=denied">Approved, Can&rsquo;t Read</a> · <a className="link" href="/connect?state=little">Too Little Data</a> · <a className="link" href="/connect?state=empty">Empty Account</a>. These links go when the real app is built.</p>
+          <p>Preview connecting: <a className="link" href="/connect?state=pending">Not Approved Yet</a> · <a className="link" href="/connect?state=denied">Approved, Can&rsquo;t Read</a> · <a className="link" href="/connect?state=little">Too Little Data</a> · <a className="link" href="/connect?state=empty">Empty Account</a>. These links go when the real app is built.</p>
         </section>
       </div>
     </div>

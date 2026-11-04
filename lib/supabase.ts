@@ -5,7 +5,7 @@ import { createServerClient, type CookieMethodsServer } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export type Source = "prepared" | "own";
-export type Visitor = { id: string; source: Source | null; connected: boolean };
+export type Visitor = { id: string; accountId: string | null; source: Source | null; connected: boolean };
 
 const url = () => process.env.SUPABASE_URL!;
 const noSession = { auth: { persistSession: false, autoRefreshToken: false } };
@@ -40,13 +40,13 @@ async function signIn(db: SupabaseClient, ip: string | null) {
   return session!.user.id;
 }
 
-/** The one prepared account, made on first use. U2 fills in its PayPal account ID on the first import. */
+/** The one prepared account, made on first use. Its PayPal account ID is our sandbox buyer's. */
 export async function preparedAccountId() {
   const admin = secretClient();
   const find = () => must(admin.from("paypal_account").select("id").eq("kind", "prepared").maybeSingle());
   const found = await find();
   if (found) return found.id as string;
-  const { error } = await admin.from("paypal_account").insert({ kind: "prepared", paypal_account_id: "pending" });
+  const { error } = await admin.from("paypal_account").insert({ kind: "prepared", paypal_account_id: process.env.PAYPAL_PREPARED_ACCOUNT_ID ?? "pending" });
   if (error && error.code !== "23505") throw error; // another visitor made it first
   return (await find()).id as string;
 }
@@ -74,10 +74,10 @@ export async function currentVisitor(db: SupabaseClient): Promise<Visitor | null
   const id = await userId(db);
   if (!id) return null;
   const person = await must(
-    db.from("person").update({ last_visit_at: new Date().toISOString() }).eq("id", id).select("paypal_account(kind)").maybeSingle(),
+    db.from("person").update({ last_visit_at: new Date().toISOString() }).eq("id", id).select("account_id, paypal_account(kind)").maybeSingle(),
   );
   if (!person) return null;
   const own = await must(db.from("paypal_account").select("id").eq("kind", "own").limit(1));
   const account = person.paypal_account as unknown as { kind: Source } | null;
-  return { id, source: account?.kind ?? null, connected: own.length > 0 };
+  return { id, accountId: person.account_id as string | null, source: account?.kind ?? null, connected: own.length > 0 };
 }

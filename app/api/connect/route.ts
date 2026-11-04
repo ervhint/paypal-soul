@@ -1,10 +1,6 @@
-import { cookies, headers } from "next/headers";
-import { choosePrepared, chooseOwn, currentVisitor, sessionClient } from "@/lib/supabase";
-
-const db = async () => {
-  const jar = await cookies();
-  return sessionClient({ getAll: () => jar.getAll(), setAll: (all) => all.forEach((c) => jar.set(c.name, c.value, c.options)) });
-};
+import { headers } from "next/headers";
+import { requestDb as db } from "@/lib/session";
+import { choosePrepared, chooseOwn, currentVisitor } from "@/lib/supabase";
 
 // The visitor's own IP, for the sign-in rate limit. Only on Vercel, where every call shares the server's IP.
 const visitorIp = async () => (process.env.VERCEL ? ((await headers()).get("x-forwarded-for")?.split(",")[0].trim() ?? null) : null);

@@ -30,7 +30,7 @@ The browser talks only to the BFF. The BFF talks to PayPal, Supabase and OpenRou
 Folders:
 - `app/` pages, `app/api/` BFF routes
 - `components/` shared UI (`shell.tsx` header and menu, `ui.tsx` primitives)
-- `lib/` server and shared code. `mock.ts` is the prototype store; each unit replaces its part and `mock.ts` goes when empty. Planned: `supabase.ts` (session and secret clients, U1), `paypal.ts` (token, transactions, orders, captures, U2/U8), `import.ts` (31-day windows, rows left out, cursor, U2), `categories.ts` (fixed list and LLM pick, U3), `totals.ts` (sums, repeats, habit sureness, U4), `llm.ts` (OpenRouter, payment text as data, U3/U4/U7), `story.ts` (chapters and claims, U4)
+- `lib/` server and shared code. `mock.ts` is the prototype store; each unit replaces its part and `mock.ts` goes when empty. Built: `supabase.ts` (session and secret clients, U1), `session.ts` (session client from request cookies), `paypal.ts` (token, transactions; orders and captures in U8), `import.ts` (31-day windows, rows left out, cursor, U2). Planned: `categories.ts` (fixed list and LLM pick, U3), `totals.ts` (sums, repeats, habit sureness, U4), `llm.ts` (OpenRouter, payment text as data, U3/U4/U7), `story.ts` (chapters and claims, U4)
 - `supabase/migrations/` SQL migrations
 - `tests/` Vitest unit and integration tests
 
@@ -39,7 +39,7 @@ BFF routes (now on mock data unless marked):
 | --- | --- | --- |
 | `GET/POST/DELETE /api/connect` | data in use; choose prepared (makes the anonymous person) or own; consent link, Check Connection; log out of own sandbox | U1, U10 |
 | `GET /api/story`, `DELETE /api/story` | chapters, claims, evidence, totals, rows left out, sync state; dismiss Here's What Changed | U2, U4, U5 |
-| `POST /api/sync` (planned) | Refresh From PayPal, reads only past the cursor | U2 |
+| `POST /api/sync` | Refresh From PayPal on open and Refresh, reads only past the cursor (real) | U2 |
 | `POST /api/correct` | correction, clarifying question, rewritten chapter | U5 |
 | `GET/PATCH /api/memory` | beliefs; edit or Stop Using This | U6 |
 | `GET/POST /api/chat` | history; grounded answer with limits | U7 |
@@ -48,7 +48,7 @@ BFF routes (now on mock data unless marked):
 | `GET /api/cron` (planned) | daily job with `CRON_SECRET`: import, captures, 30-day cleanup, keep Supabase awake | U11 |
 | `POST /api/reset` | prototype only, removed with `mock.ts` | — |
 
-Env vars (names in `.env.example`, all server only, never `NEXT_PUBLIC_`): `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` (app `soul`, orders), `PAYPAL_PLATFORM_CLIENT_ID`, `PAYPAL_PLATFORM_CLIENT_SECRET` (consent and reading), `OPENROUTER_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SECRET_KEY`, `CRON_SECRET`. `.env.local` also keeps the `_PROD` Supabase values and sandbox test logins for P7 and manual tests; the app doesn't read those.
+Env vars (names in `.env.example`, all server only, never `NEXT_PUBLIC_`): `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` (app `soul`, orders), `PAYPAL_PLATFORM_CLIENT_ID`, `PAYPAL_PLATFORM_CLIENT_SECRET` (consent and reading), `PAYPAL_PREPARED_ACCOUNT_ID` (our sandbox buyer behind the prepared data), `OPENROUTER_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SECRET_KEY`, `CRON_SECRET`. `.env.local` also keeps the `_PROD` Supabase values and sandbox test logins for P7 and manual tests; the app doesn't read those.
 
 ## Conventions
 - UI copy uses Title Case for headings, labels, buttons, tags, chips and short status text. Full sentences stay in sentence case. Use `titleCase` from `lib/title-case.ts` for names that come from data.
