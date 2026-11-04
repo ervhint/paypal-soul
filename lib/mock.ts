@@ -24,7 +24,7 @@ export type Chapter = {
 };
 export type Memory = {
   id: string;
-  kind: "habit" | "check";
+  kind: "habit" | "check" | "interest" | "support" | "told";
   text: string;
   sure: "Sure" | "Fairly Sure" | "Not Sure";
   source: string;
@@ -98,45 +98,6 @@ export const snapshot = () => {
   const s = db();
   return { ...s, summary: summary(s) };
 };
-
-const WHO = /\b(mum|mom|mother|dad|father|sister|brother|friend|parents|family|neighbou?r|colleague|kids?|partner)\b/i;
-
-export function correct(claimId: string, text: string, who?: string) {
-  const s = db();
-  const ch = s.chapters.find((c) => c.claims.some((c2) => c2.id === claimId));
-  const claim = ch?.claims.find((c) => c.id === claimId);
-  if (!ch || !claim) return { status: "error" as const, message: "I can't find that sentence." };
-  const named = who ?? text.match(WHO)?.[1];
-  if (!named) {
-    return { status: "ask" as const, question: "Who Are They For?", options: ["Mum", "A Friend", "Someone Else"] };
-  }
-  const label = /^(mum|mom|mother|dad|father|sister|brother|parents)$/i.test(named) ? `your ${named.toLowerCase()}` : named.toLowerCase();
-  const before = claim.text;
-  const after = `The groceries are for ${label}, not for you. I'll count them as support, not spending on you.`;
-  const spentBefore = summary(s).spent;
-  claim.text = after;
-  claim.rewritten = true;
-  ch.title = `Groceries Go to ${titleCase(label)}`;
-  claim.paymentIds.forEach((id) => {
-    const p = s.payments.find((p) => p.id === id);
-    if (p) p.forWho = "support";
-  });
-  const m = s.memory.find((m) => m.id === claim.belief);
-  if (m) Object.assign(m, { kind: "habit", text: `You buy groceries for ${label}.`, sure: "Sure", source: "You Told Me, Nov 2" });
-  s.who = label;
-  s.corrected = true;
-  s.change = {
-    claimId,
-    before,
-    after,
-    notes: [
-      `I now believe the groceries are for ${label}.`,
-      `Spent on you: ${money(spentBefore)} → ${money(summary(s).spent)}.`,
-      `${claim.paymentIds.length} payments now count as support.`,
-    ],
-  };
-  return { status: "done" as const };
-}
 
 const purchase = (txn: string) => {
   const s = db();

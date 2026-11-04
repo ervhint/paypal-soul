@@ -1,4 +1,4 @@
-# Tests
+#undefined✅undefined✅undefined✅undefined✅undefined✅ | Chrome on localhost 2026-11-04: Looks Right on the coffee sentence showed "Thanks, I'm Sure Now", the belief's source became "You Checked It, Nov 4" and the chapter text stayed the same (that habit was already Sure from the daily plan). `tests/correct.test.ts`: a Not Sure belief becomes Sure, same claim and text, no correction saved || `tests/correct.test.ts` 2026-11-04 on Staging: after a correction every chapter was deleted and rebuilt; the LLM got the told belief again and the payments marked `for`, the groceries sentence still says it and links the support belief, Spent on You stays lower. Also: a failed rewrite saves nothing || Chrome on localhost 2026-11-04: "that one isn't for me" on the mobile data sentence asked "Who Are They For?" with Mum, A Friend, Someone Else and rewrote nothing. `tests/correct.test.ts`: nothing saved until answered, then the answer Mum saves support for your mum || Chrome on localhost 2026-11-04: the panel (folded to one line, opens on tap) shows the old sentence struck through, the new sentence, "What I believe now…", "Spent on you: $91.20 → $45.00.", "1 payment now counts as support for your mum." and the new title. All lines written by code (`tests/correct.test.ts`) || Chrome on localhost 2026-11-04, prepared data, real LLM: tapped "Your biggest single spend was weekly groceries at $46.20…", That's Not Right, typed "those groceries are for my mum": the chapter rewrote to "You told me you buy the weekly groceries for your mum, and the $46.20 payment for them was for her.", marked pink; Memory has the support belief "You buy the weekly groceries for your mum." (Sure, You Told Me, Nov 4); Spent on You $91.20 → $45.00 in pink; still there after reload |Tests
 
 Automated tests (types unit and integration) run with `npm test` on localhost before every unit report and every commit request, and all must pass first. GitHub Actions runs them again on every push, with the build and a gitleaks secret scan (type ci). Unit tests run in Vitest with PayPal and the LLM mocked. Integration tests use the hosted Supabase Staging project with a dedicated test person who cleans up their rows. Besides the dev server, only `npm test` and gitleaks run on the user's computer.
 
@@ -166,8 +166,8 @@ One click-through in this order. Run it at both widths.
 | 1 | T-1.1 | Click Try It With Our Prepared Data. Story opens, no login. | ⏭ | ⏭ |
 | 2 | T-4.2 | Newest chapter is open with what Soul noticed. | ✅ | ✅ |
 | 3 | T-4.4 | Tap a sentence. Evidence sheet shows date, amount and transaction ID. | ✅ | ⏭ |
-| 4 | T-5.1 | Correct the groceries sentence. Chapter rewrites, changed sentence is pink. | ⏭ | ⏭ |
-| 5 | T-5.2 | Here's What Changed lists old and new sentence and totals. | ⏭ | ⏭ |
+| 4 | T-5.1 | Correct the groceries sentence. Chapter rewrites, changed sentence is pink. | ✅ | ⏭ |
+| 5 | T-5.2 | Here's What Changed lists old and new sentence and totals. | ✅ | ⏭ |
 | 6 | T-7.1 | Ask about the groceries on `/chat`. Answer uses the correction and cites payments. | ⏭ | ⏭ |
 | 7 | T-8.1 | Pay on `/buy`. Status page shows the PayPal link, action waiting. | ⏭ | ⏭ |
 | 8 | T-8.3 | After approval, `/story` shows a new chapter marked new. | ⏭ | ⏭ |

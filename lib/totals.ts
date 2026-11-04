@@ -12,6 +12,7 @@ export type StoryPayment = {
   payee?: string | null; // shown on the evidence sheet, never sent to the LLM
   event_code: string;
   category: string | null;
+  for_who?: string | null; // someone else the person said it was for (U5), so it isn't spending on them
 };
 export type Sureness = "not_sure" | "fairly_sure" | "sure";
 export type Repeat = {
@@ -74,18 +75,26 @@ export function repeats(pays: StoryPayment[]): Repeat[] {
   return out.sort((a, b) => b.days - a.days || b.spent - a.spent);
 }
 
-/** Counts and sums for a set of payments. Money received (negative amounts) isn't spending. */
+/**
+ * Counts and sums for a set of payments. Money received (negative amounts) isn't spending, and what the
+ * person said was for someone else is counted per person instead of as spending on them.
+ */
 export function totals(pays: StoryPayment[]) {
   const spending = pays.filter((p) => p.amount > 0);
   const byCategory = new Map<string, StoryPayment[]>();
+  const byWho = new Map<string, StoryPayment[]>();
   for (const p of spending) {
     const c = p.category ?? "unknown";
     byCategory.get(c)?.push(p) ?? byCategory.set(c, [p]);
+    if (p.for_who) byWho.get(p.for_who)?.push(p) ?? byWho.set(p.for_who, [p]);
   }
   const days = pays.map((p) => dayOf(p.occurred_at)).sort();
   return {
     payments: pays.length,
     spent: sum(spending),
+    onYou: sum(spending.filter((p) => !p.for_who)),
+    paymentsOnYou: pays.filter((p) => !p.for_who).length,
+    forOthers: [...byWho].map(([who, ps]) => ({ who, payments: ps.length, spent: sum(ps) })).sort((a, b) => b.spent - a.spent),
     received: -sum(pays.filter((p) => p.amount < 0)),
     from: days[0] ?? null,
     to: days.at(-1) ?? null,

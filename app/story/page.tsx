@@ -69,7 +69,9 @@ function StoryView() {
   const submit = async (who?: string) => {
     if (!claim) return;
     setBusy(true);
-    const r = await (await post("/api/correct", { claimId: claim.id, text, who })).json();
+    const r = await post("/api/correct", { claimId: claim.id, text, who })
+      .then((r) => r.json())
+      .catch(() => ({ status: "error", message: "I couldn't reach Soul just now. Try again in a moment." }));
     setBusy(false);
     if (r.status === "ask") {
       setQuestion(r);
@@ -116,8 +118,22 @@ function StoryView() {
     setClaim(c);
     setStep("evidence");
   };
+  // Looks Right: the belief behind the sentence becomes Sure, and nothing is rewritten.
+  const confirm = async () => {
+    if (!claim) return;
+    setBusy(true);
+    const r = await fetch("/api/correct", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claimId: claim.id }) })
+      .then((r) => r.json())
+      .catch(() => null);
+    setBusy(false);
+    if (r?.status !== "done") return toast.show(r?.message ?? "I Couldn't Save That Just Now");
+    close();
+    if (r.sure) await reload();
+    toast.show(r.sure ? "Thanks, I'm Sure Now" : "Thanks for Checking");
+  };
   const pays = (c: Claim) => data.payments.filter((p) => c.paymentIds.includes(p.id));
   const { change } = data;
+  const changedIn = change && data.chapters.find((ch) => ch.claims.some((c) => c.id === change.claimId));
   const waiting = data.actions.filter((a) => a.status === "waiting");
   const hot = !!change && !seen;
   const rail: [string, string, boolean][] = [
@@ -165,19 +181,20 @@ function StoryView() {
             <p className="prose">
               {ch.claims.map((c) => (
                 <span key={c.id}>
-                  <button className={`claim${c.id === change?.claimId && !seen ? " changed" : ""}`} onClick={() => open(c)} aria-label={`${c.text} Show the payments behind this.`}>
+                  <button className={`claim${hot && ch === changedIn && (c.rewritten || c.id === change?.claimId) ? " changed" : ""}`} onClick={() => open(c)} aria-label={`${c.text} Show the payments behind this.`}>
                     <span className="claim-text">{c.text}</span>
                   </button>{" "}
                 </span>
               ))}
             </p>
-              {change && !seen && ch.claims.some((c) => c.id === change.claimId) && (
+              {hot && ch === changedIn && (
                 <details className="changes" aria-label="What changed">
                   <summary>
                     <span className="tag">Rewritten</span> You Corrected Me
                     <button className="link" onClick={(e) => { e.preventDefault(); setSeen(true); fetch("/api/story", { method: "DELETE" }); }}>Looks Right</button>
                   </summary>
-                  <p className="before">{change.before}</p>
+                  <p className="before"><span className="sr">Before: </span>{change.before}</p>
+                  <p className="after"><span className="sr">Now: </span>{change.after}</p>
                   <ul>{change.notes.map((n) => <li key={n}>{n}</li>)}</ul>
                   <div className="row" style={{ marginTop: 16 }}>
                     <Link className="btn line small" href="/memory">See What I Remember</Link>
@@ -240,7 +257,7 @@ function StoryView() {
             <p className="note"><button className="link" style={{ fontSize: 13.5 }} onClick={() => { close(); setMissing(true); }}>Why Are Some Rows Missing?</button></p>
             <div className="actions">
               <button className="btn" onClick={() => setStep("correct")}>That&rsquo;s Not Right</button>
-              <button className="btn dark" onClick={close}>That&rsquo;s Right</button>
+              <button className="btn dark" disabled={busy} onClick={confirm}>Looks Right</button>
             </div>
           </>
         )}

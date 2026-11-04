@@ -60,6 +60,15 @@ describe("the LLM writes from code's figures only (T-4.1)", () => {
     expect(text).not.toContain("T0002");
   });
 
+  it("gives dates the way a sentence says them, never as numbers outside the week key", () => {
+    const { data } = briefFor(["2026-11-02"], all);
+    expect(data.weeks[0].dates).toBe("Nov 2 to Nov 4");
+    expect(data.payments.map((p) => p.date).sort()).toEqual(["Nov 1", "Nov 2", "Nov 3", "Nov 3", "Nov 4"]);
+    const { week, ...rest } = data.weeks[0];
+    expect(JSON.stringify({ rest, payments: data.payments })).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(week).toBe("2026-11-02");
+  });
+
   it("puts the habit on the sentence that names it, and maps refs back to payment IDs", async () => {
     const llm = mockLlm(() => ({ chapters: [{ week: "2026-11-02", title: "coffee every morning", claims: [{ text: "Your mornings start with coffee.", payments: ["p1", "p5"], habit: "h1" }] }] }));
     const [ch] = await writeChapters(["2026-11-02"], all, llm.ask);

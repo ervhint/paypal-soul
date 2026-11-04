@@ -168,6 +168,8 @@ a { color: inherit; text-decoration: none; }
 .changes ul { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--soft); font-size: 15px; }
 .changes li::before { content: "→ "; color: var(--mark); }
 .before { margin-top: 18px; padding-left: 14px; border-left: 2px solid var(--line); color: var(--muted); font-size: 15px; line-height: 1.5; text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.35); }
+.after { margin-top: 10px; padding-left: 14px; border-left: 2px solid var(--mark); color: #fff; font-size: 15px; line-height: 1.5; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .states { margin-top: 64px; padding-top: 18px; border-top: 1px dashed var(--line); font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .states a { text-decoration: underline; text-underline-offset: 3px; }
 

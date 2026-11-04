@@ -6,14 +6,13 @@ import { currentVisitor } from "@/lib/supabase";
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-// The saved story, at once and without waiting for PayPal (NF-1). Actions and Here's What Changed are
-// still the prototype's until U5 and U8.
+// The saved story, at once and without waiting for PayPal (NF-1). Actions are still the prototype's until U8.
 export async function GET() {
   const client = await requestDb();
   const v = await currentVisitor(client);
-  const { actions, change } = mock();
+  const { actions } = mock();
   if (!v?.accountId)
-    return Response.json({ chapters: [], payments: [], memory: [], leftOut: [], actions, change, summary: { payments: 0, spent: 0, habits: 0, checks: 0 }, syncedThrough: null });
+    return Response.json({ chapters: [], payments: [], memory: [], leftOut: [], actions, change: null, summary: { payments: 0, spent: 0, habits: 0, checks: 0 }, syncedThrough: null });
   const [story, rows, account] = await Promise.all([
     readStory(client, v.accountId),
     client.from("left_out_row").select("paypal_txn_id, occurred_at, amount, event_code, reason").eq("account_id", v.accountId).order("occurred_at", { ascending: false }),
@@ -21,10 +20,15 @@ export async function GET() {
   ]);
   if (rows.error) throw rows.error;
   const leftOut = rows.data.map((r) => ({ txn: r.paypal_txn_id, code: r.event_code, label: LEFT_OUT_LABELS[r.event_code] ?? r.event_code, amount: Number(r.amount), date: day(r.occurred_at), why: r.reason }));
-  return Response.json({ ...story, leftOut, actions, change, syncedThrough: account.data?.synced_through ?? null });
+  return Response.json({ ...story, leftOut, actions, syncedThrough: account.data?.synced_through ?? null });
 }
 
-export function DELETE() {
-  mock().change = null;
+// Here's What Changed was seen: it stops showing.
+export async function DELETE() {
+  const client = await requestDb();
+  const v = await currentVisitor(client);
+  if (!v?.accountId) return Response.json({ ok: true });
+  const { error } = await client.from("correction").update({ seen_at: new Date().toISOString() }).eq("account_id", v.accountId).is("seen_at", null);
+  if (error) throw error;
   return Response.json({ ok: true });
 }
