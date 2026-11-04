@@ -18,7 +18,8 @@ export default function Welcome() {
     show("Deleted. Your corrections, memory and chat are gone.");
   }, [show]);
   const prepared = async () => {
-    await post("/api/connect", { source: "prepared" });
+    const r = await post("/api/connect", { source: "prepared" });
+    if (!r.ok) return show("Soul couldn't start just now. Try again in a moment.");
     router.push("/story");
   };
   const s = data?.summary;

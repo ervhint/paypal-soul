@@ -18,7 +18,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [menu, setMenu] = useState(false);
   const [paused, setPaused] = useState(false);
   const source = useRef<HTMLDivElement>(null);
-  const { data, reload } = useApi<{ source: "prepared" | "own"; connected: boolean }>("/api/connect");
+  const { data, reload } = useApi<{ source: "prepared" | "own" | null; connected: boolean }>("/api/connect");
   const video = useRef<HTMLVideoElement>(null);
   const home = path === "/";
   const current = (href: string) => path === href || path.startsWith(href + "/") || (href === "/story" && path.startsWith("/buy"));
@@ -76,10 +76,12 @@ export function Shell({ children }: { children: ReactNode }) {
     setPaused(!paused);
   };
   const own = data?.source === "own";
+  const prepared = data?.source === "prepared";
+  const label = own ? "Using My Sandbox" : prepared ? "Using Prepared Data" : "Choose Your Data";
   const mark = (on: boolean) => <i className={`fa-solid fa-check${on ? "" : " off"}`} aria-hidden="true" />;
   const choices = (
     <>
-      <button onClick={() => choose("prepared")} aria-current={!own || undefined}>{mark(!own)} Prepared Data</button>
+      <button onClick={() => choose("prepared")} aria-current={prepared || undefined}>{mark(prepared)} Prepared Data</button>
       {data?.connected ? (
         <>
           <button onClick={() => choose("own")} aria-current={own || undefined}>{mark(own)} My Sandbox</button>
@@ -112,10 +114,10 @@ export function Shell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-          {!home && (
+          {data && (
             <div className="source" ref={source}>
               <button className="sign-in" aria-haspopup="true" aria-expanded={menu} onClick={() => setMenu(!menu)}>
-                {own ? "Using My Sandbox" : "Using Prepared Data"} <i className="fa-solid fa-chevron-down" aria-hidden="true" />
+                {label} <i className="fa-solid fa-chevron-down" aria-hidden="true" />
               </button>
               {menu && <div className="source-menu">{choices}</div>}
             </div>
@@ -135,7 +137,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   {n.label}
                 </Link>
               ))}
-              {!home && <div className="sheet-source">{choices}</div>}
+              {data && <div className="sheet-source">{choices}</div>}
             </div>
           </>
         )}

@@ -40,7 +40,13 @@ export default function AboutPage() {
         </section>
         <section>
           <h2>What a Real Launch Needs</h2>
-          <p>PayPal&rsquo;s approval for production access. Consent works in the sandbox today, but Soul can&rsquo;t read real accounts until PayPal grants that access, and each person would still approve it themselves.</p>
+          <p>Soul runs on PayPal&rsquo;s sandbox only. Reading real accounts would need:</p>
+          <ul>
+            <li>PayPal&rsquo;s approval for production access. Consent works in the sandbox today, but Soul can&rsquo;t read real accounts until PayPal grants it, and each person would still approve it themselves.</li>
+            <li>Live PayPal app keys, kept apart from the sandbox ones.</li>
+            <li>A privacy policy and terms that say what Soul keeps and for how long.</li>
+            <li>Real sign-in, so a story follows a person across devices instead of one browser.</li>
+          </ul>
         </section>
         <section>
           <h2>Demo Controls</h2>

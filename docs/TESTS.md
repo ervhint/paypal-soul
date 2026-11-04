@@ -18,7 +18,7 @@ Words used here:
 
 Other terms (RLS, BFF, LCP, capture, sandbox …) are explained in the word list at the top of docs/PLAN.md.
 
-Latest run: 2026-11-03, U0: T-0.1 to T-0.7 and NF-4 ✅.
+Latest run: 2026-11-04, U1: T-1.1 to T-1.5 ✅. Before that, 2026-11-03, U0: T-0.1 to T-0.7 and NF-4 ✅.
 
 ## Phase A: Setup
 
@@ -36,11 +36,11 @@ Latest run: 2026-11-03, U0: T-0.1 to T-0.7 and NF-4 ✅.
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-1.1 | AC-1.1 | e2e golden | Open `/` as a new visitor. Click Try It With Our Prepared Data. | An anonymous person is made with their own copy. `/story` opens with no login step. | ⏭ | |
-| T-1.2 | AC-1.2 | integration | Make two anonymous people on prepared data. Change a belief for person one. Read both copies. | Person two's copy is unchanged. | ⏭ | |
-| T-1.3 | AC-1.3 | e2e | Start prepared data, close the tab, open `/` again in the same browser. | The same copy comes back, with the earlier changes. | ⏭ | |
-| T-1.4 | AC-1.4 | e2e | Open the header menu on `/`, `/story`, `/memory`, `/chat` and `/about`. | Each menu names the data in use and offers Prepared Data, and My Sandbox or Log In With PayPal. | ⏭ | |
-| T-1.5 | AC-1.5 | e2e | Open `/about`. | The page says the data is sandbox and lists what a real launch needs, including PayPal's production approval. | ⏭ | |
+| T-1.1 | AC-1.1 | e2e golden | Open `/` as a new visitor. Click Try It With Our Prepared Data. | An anonymous person is made with their own copy. `/story` opens with no login step. | ✅ | 2026-11-04: Chrome on localhost, `/` → Try It → `/story`, no login, menu says Using Prepared Data. `tests/visitor.test.ts` checks the anonymous user and person row |
+| T-1.2 | AC-1.2 | integration | Make two anonymous people on prepared data. Change a belief for person one. Read both copies. | Person two's copy is unchanged. | ✅ | 2026-11-04: `tests/visitor.test.ts`, A rewrites a belief, B's stays the same |
+| T-1.3 | AC-1.3 | e2e | Start prepared data, close the tab, open `/` again in the same browser. | The same copy comes back, with the earlier changes. | ✅ | 2026-11-04: Chrome, closed the tab, reopened `/`, same person (person count unchanged), plus `tests/visitor.test.ts`. Earlier changes come back once U4–U6 move story and memory off the mock |
+| T-1.4 | AC-1.4 | e2e | Open the header menu on `/`, `/story`, `/memory`, `/chat` and `/about`. | Each menu names the data in use and offers Prepared Data, and My Sandbox or Log In With PayPal. | ✅ | 2026-11-04: Chrome, menu on all five pages shows Using Prepared Data with Prepared Data (current) and Log In With PayPal. Phone sheet has the same choices |
+| T-1.5 | AC-1.5 | e2e | Open `/about`. | The page says the data is sandbox and lists what a real launch needs, including PayPal's production approval. | ✅ | 2026-11-04: Chrome, About says sandbox and lists 4 launch needs, PayPal production approval first |
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
