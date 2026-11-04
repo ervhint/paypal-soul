@@ -15,6 +15,7 @@ export const FIRST_IMPORT_DAYS = 183;
 export const LEFT_OUT_LABELS: Record<string, string> = {
   T1900: "General account correction",
   T0300: "Bank deposit to PayPal account",
+  T0006: "PayPal checkout payment",
 };
 
 export type Account = { id: string; paypal_account_id: string; synced_through: string | null };
@@ -27,6 +28,8 @@ export type Store = {
   save: (accountId: string, rows: Sorted) => Promise<number>;
   /** Moves the cursor forward, never back. */
   setCursor: (accountId: string, at: Date) => Promise<void>;
+  /** Which of these capture IDs belong to purchases made in Soul (U8). */
+  madeInSoul?: (captureIds: string[]) => Promise<Set<string>>;
 };
 
 /** Back-to-back windows from `from` to `to`, none longer than 31 days. */
@@ -70,13 +73,30 @@ export function sortRows(rows: PayPalTxn[]): Sorted {
   return { payments, leftOut };
 }
 
+export const MADE_IN_SOUL = "A purchase made in Soul. It joined the story of the person who made it from PayPal's checkout result, so it isn't counted again.";
+
+/** The capture ID a buyer's row points to, when it's the buyer's side of a checkout payment. */
+const captureRef = (t: PayPalTxn) => (t.transaction_info.paypal_reference_id_type === "TXN" ? t.transaction_info.paypal_reference_id : undefined);
+
+/** Moves the report rows of purchases made in Soul to the rows left out, so each is counted once (AC-8.5). */
+export function leaveOutMadeInSoul({ payments, leftOut }: Sorted, rows: PayPalTxn[], captured: Set<string>): Sorted {
+  const ref = new Map(rows.map((t) => [t.transaction_info.transaction_id, captureRef(t)]));
+  const soul = payments.filter((p) => captured.has(ref.get(p.paypal_txn_id) ?? ""));
+  return {
+    payments: payments.filter((p) => !soul.includes(p)),
+    leftOut: [...leftOut, ...soul.map(({ paypal_txn_id, occurred_at, amount, currency, event_code }) => ({ paypal_txn_id, occurred_at, amount, currency, event_code, reason: MADE_IN_SOUL }))],
+  };
+}
+
 /** Reads everything past the cursor (or 6 months back the first time) and saves it. */
 export async function importAccount(account: Account, read: Reader, store: Store, now = new Date()) {
   let cursor = account.synced_through ? new Date(account.synced_through) : new Date(+now - FIRST_IMPORT_DAYS * DAY);
   let added = 0;
   for (const [start, end] of windows(cursor, now)) {
     const page = await read(account.paypal_account_id, start, end);
-    added += await store.save(account.id, sortRows(page.rows));
+    const refs = page.rows.map(captureRef).filter((r): r is string => !!r);
+    const captured = refs.length && store.madeInSoul ? await store.madeInSoul(refs) : new Set<string>();
+    added += await store.save(account.id, leaveOutMadeInSoul(sortRows(page.rows), page.rows, captured));
     // PayPal's report lags; rows after its last refresh may still arrive, so the cursor stops there.
     const done = new Date(Math.min(+end, +new Date(page.lastRefreshed)));
     if (done > cursor) {
@@ -107,6 +127,11 @@ export function supabaseStore(admin: SupabaseClient): Store {
       const iso = at.toISOString();
       const { error } = await admin.from("paypal_account").update({ synced_through: iso }).eq("id", accountId).or(`synced_through.is.null,synced_through.lt.${iso}`);
       if (error) throw error;
+    },
+    madeInSoul: async (captureIds) => {
+      const { data, error } = await admin.from("action").select("paypal_txn_id").in("paypal_txn_id", captureIds);
+      if (error) throw error;
+      return new Set(data.map((a) => a.paypal_txn_id as string));
     },
   };
 }

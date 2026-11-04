@@ -1,18 +1,11 @@
+import type { Action } from "@/lib/action";
 import { titleCase } from "@/lib/title-case";
+
+export type { Action };
 
 // Prototype data. P6 replaces each function with the real PayPal sandbox + memory store behind the same API routes.
 export type Payment = { id: string; txn: string; item: string; payee: string; category: string; icon: string; amount: number; date: string; forWho: "you" | "support" };
 export type LeftOut = { txn: string; code: string; label: string; amount: number; date: string; why: string };
-export type Action = {
-  id: string;
-  kind: "send" | "buy";
-  status: "waiting" | "completed" | "cancelled" | "expired";
-  title: string;
-  to: string;
-  amount: number;
-  fee?: number;
-  txn?: string;
-};
 export type Claim = { id: string; text: string; paymentIds: string[]; belief?: string; rewritten?: boolean };
 export type Chapter = {
   id: string;
@@ -33,7 +26,6 @@ export type Memory = {
 };
 export type Change = { claimId: string; before: string; after: string; notes: string[] };
 
-const money = (n: number) => `$${n.toFixed(2)}`;
 
 const seed = () => ({
   source: "prepared" as "prepared" | "own",
@@ -98,22 +90,6 @@ export const snapshot = () => {
   return { ...s, summary: summary(s) };
 };
 
-const purchase = (txn: string) => {
-  const s = db();
-  s.payments.push({ id: "P-1047", txn, payee: "Test Store", category: "Groceries", item: "Weekend market", icon: "carrot", amount: 18, date: "Nov 2", forWho: "you" });
-  s.change = null;
-  s.chapters.unshift({
-    id: "ch-market",
-    title: "A Stop at the Market",
-    when: "Just Now",
-    fresh: true,
-    claims: [{ id: "c5", text: "A new payment came in: $18.00 at the weekend market. Fresh food again, and I'm not sure who it's for.", paymentIds: ["P-1047"] }],
-    suggest: s.corrected
-      ? { text: `${s.who[0].toUpperCase() + s.who.slice(1)} got ${money(50.8)} of groceries from you this week. Want to send $25.00 towards next week's?`, label: "Review the Payment", href: "/action/confirm" }
-      : undefined,
-  });
-};
-
 const sendMoney = (txn: string) => {
   const s = db();
   s.payments.push({ id: "P-1048", txn, payee: s.who, category: "Family support", item: `Sent to ${s.who}`, icon: "paper-plane", amount: 25, date: "Nov 2", forWho: "support" });
@@ -132,17 +108,15 @@ const sendMoney = (txn: string) => {
   });
 };
 
-export function createAction(kind: Action["kind"], to?: string) {
+// Send money only: purchases are real since U8 (lib/action.ts).
+export function createAction(kind: "send", to?: string) {
   const s = db();
   const open = s.actions.find((a) => a.kind === kind && a.status === "waiting");
   if (open) return open;
   const done = s.actions.find((a) => a.kind === kind && a.status === "completed");
   if (done) return done;
   const id = `A-${s.actions.length + 1}`;
-  const action: Action =
-    kind === "send"
-      ? { id, kind, status: "waiting", title: `$25.00 to ${s.who}`, to: to ?? "", amount: 25 }
-      : { id, kind, status: "waiting", title: "$18.00 at the weekend market", to: "Test Store", amount: 18 };
+  const action: Action = { id, kind, status: "waiting", title: `$25.00 to ${s.who}`, to: to ?? "", amount: 25 };
   s.actions.push(action);
   return action;
 }
@@ -154,11 +128,9 @@ export function settleAction(id: string, outcome: "completed" | "cancelled" | "e
   if (!a || a.status !== "waiting") return a;
   a.status = outcome;
   if (outcome !== "completed") return a;
-  a.txn = a.kind === "send" ? "4UP17093XW6628450" : "8ZB30561MJ9947712";
-  if (a.kind === "send") {
-    // Prototype figure in the shape of the Nov 2 test ($1.00 paid, $0.52 fee). P6 shows the fee PayPal returns.
-    a.fee = Math.round((a.amount * 0.0349 + 0.49) * 100) / 100;
-    sendMoney(a.txn);
-  } else purchase(a.txn);
+  a.txn = "4UP17093XW6628450";
+  // Prototype figure in the shape of the Nov 2 test ($1.00 paid, $0.52 fee). P6 shows the fee PayPal returns.
+  a.fee = Math.round((a.amount * 0.0349 + 0.49) * 100) / 100;
+  sendMoney(a.txn);
   return a;
 }

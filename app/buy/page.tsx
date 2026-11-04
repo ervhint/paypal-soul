@@ -21,7 +21,7 @@ export default function BuyPage() {
       <Receipt stages={["Check", "Waiting", "Added"]} now={0} amount={18} title="Buy Something Small">
         <p className="lead">Make a payment in PayPal&rsquo;s sandbox and watch me write a new chapter about it.</p>
         <ul className="deal">
-          <li><span>Item</span><b>Weekend Market</b></li>
+          <li><span>Item</span><b>Weekend Market Groceries</b></li>
           <li><span>Paid To</span><b>Test Store</b></li>
         </ul>
         <div className="row" style={{ marginTop: 24 }}>

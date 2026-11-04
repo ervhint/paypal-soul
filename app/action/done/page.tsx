@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useApi } from "@/lib/use-api";
 import { Receipt, money } from "@/components/ui";
 import { titleCase } from "@/lib/title-case";
-import type { Action } from "@/lib/mock";
+import type { Action } from "@/lib/action";
 
 function Done() {
   const id = useSearchParams().get("id");

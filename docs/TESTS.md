@@ -18,7 +18,7 @@ Words used here:
 
 Other terms (RLS, BFF, LCP, capture, sandbox …) are explained in the word list at the top of docs/PLAN.md.
 
-Latest run: 2026-11-04, U1: T-1.1 to T-1.5 ✅. Before that, 2026-11-03, U0: T-0.1 to T-0.7 and NF-4 ✅.
+Latest run: 2026-11-04, U8: T-8.1 to T-8.5 ✅. Before that, U1: T-1.1 to T-1.5 ✅. Before that, 2026-11-03, U0: T-0.1 to T-0.7 and NF-4 ✅.
 
 ## Phase A: Setup
 
@@ -98,11 +98,11 @@ Latest run: 2026-11-04, U1: T-1.1 to T-1.5 ✅. Before that, 2026-11-03, U0: T-0
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-8.1 | AC-8.1 | e2e golden | Open `/buy`. Click pay. Open `/action/status?id=`. | A sandbox order exists. The status page shows the PayPal link and the action is waiting. | ⏭ | |
-| T-8.2 | AC-8.2 | e2e, manual approval | Approve a sandbox order on PayPal by hand. Return to Soul, then run the daily job on a second approved order. | Each order is captured once and its action completes. | ⏭ | |
-| T-8.3 | AC-8.3 | e2e golden | After the purchase completes, open `/story`. | A new chapter marked new shows, built from the capture result before report rows arrive. | ⏭ | |
-| T-8.4 | AC-8.4 | e2e | Open `/action/status?id=` for a cancelled order, and for an expired one. | The page says cancelled or expired. `/story` has no new chapter. | ⏭ | |
-| T-8.5 | AC-8.5 | unit | Import report rows that include an already captured payment. | The payment is counted once. | ⏭ | |
+| T-8.1 | AC-8.1 | e2e golden | Open `/buy`. Click pay. Open `/action/status?id=`. | A sandbox order exists. The status page shows the PayPal link and the action is waiting. | ✅ | Chrome Nov 4: real order 822072315H6478420, Open PayPal Sandbox links to it, Check Now says Not Paid Yet · `tests/action.test.ts` (Staging, fake PayPal) |
+| T-8.2 | AC-8.2 | e2e, manual approval | Approve a sandbox order on PayPal by hand. Return to Soul, then run the daily job on a second approved order. | Each order is captured once and its action completes. | ✅ | Nov 4: the user approved two orders with the sandbox buyer; each captured once on return (68247486KK3864138, 2DH257489X562961R). `/api/cron` refuses without `CRON_SECRET` and left an unpaid order waiting. Daily-job capture of an approved order, and two tries at once, in `tests/action.test.ts` (fake PayPal): PayPal returns to the status page at once, so a real order can't skip the return |
+| T-8.3 | AC-8.3 | e2e golden | After the purchase completes, open `/story`. | A new chapter marked new shows, built from the capture result before report rows arrive. | ✅ | Chrome Nov 4: "Weekend Market Groceries" marked New on top, filed under Groceries, Spent on You $63.00 → $81.00 · `tests/action.test.ts`: only that person sees the payment |
+| T-8.4 | AC-8.4 | e2e | Open `/action/status?id=` for a cancelled order, and for an expired one. | The page says cancelled or expired. `/story` has no new chapter. | ✅ | Chrome Nov 4: PayPal's cancel return shows Cancelled on PayPal, story unchanged · expired (PayPal no longer knows the order) in `tests/action.test.ts` only |
+| T-8.5 | AC-8.5 | unit | Import report rows that include an already captured payment. | The payment is counted once. | ✅ | `tests/action.test.ts`: the buyer's row whose `paypal_reference_id` (TXN) is a Soul capture goes to rows left out. Real rows not seen yet: the report lags up to 3 hours |
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -169,8 +169,8 @@ One click-through in this order. Run it at both widths.
 | 4 | T-5.1 | Correct the groceries sentence. Chapter rewrites, changed sentence is pink. | ✅ | ⏭ |
 | 5 | T-5.2 | Here's What Changed lists old and new sentence and totals. | ✅ | ⏭ |
 | 6 | T-7.1 | Ask about the groceries on `/chat`. Answer uses the correction and cites payments. | ✅ | ⏭ |
-| 7 | T-8.1 | Pay on `/buy`. Status page shows the PayPal link, action waiting. | ⏭ | ⏭ |
-| 8 | T-8.3 | After approval, `/story` shows a new chapter marked new. | ⏭ | ⏭ |
+| 7 | T-8.1 | Pay on `/buy`. Status page shows the PayPal link, action waiting. | ✅ | ⏭ |
+| 8 | T-8.3 | After approval, `/story` shows a new chapter marked new. | ✅ | ⏭ |
 | 9 | T-9.1 | Chapter suggests sending money, with a label. | ⏭ | ⏭ |
 | 10 | T-9.2 | Confirm page shows recipient, amount and the approval note. | ⏭ | ⏭ |
 | 11 | T-9.3 | Done page shows recipient, amount, real fee and transaction ID. | ⏭ | ⏭ |

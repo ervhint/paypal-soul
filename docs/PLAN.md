@@ -126,13 +126,13 @@ Also near: [Salah](https://salah-liart.vercel.app/#/overview), merchant intellig
 | NF-13 | The demo stays up and free to use until Dec 15, 2026 | Daily job keeps Supabase awake, checked in P7 |
 
 ## 3. Data entities
-Schema: `supabase/migrations/20261103102320_init.sql` (U0) `20261104092447_story.sql` (U4: a chapter's week and the payments it covered, a belief's key) and `20261104143835_correction.sql` (U5: support and told beliefs with `who`, a per-person `category` and `told_at`; a correction's `seen_at`), all applied to Staging. No PayPal keys or tokens anywhere, only the PayPal account ID (NF-5).
+Schema: `supabase/migrations/20261103102320_init.sql` (U0) `20261104092447_story.sql` (U4: a chapter's week and the payments it covered, a belief's key) and `20261104143835_correction.sql` (U5: support and told beliefs with `who`, a per-person `category` and `told_at`; a correction's `seen_at`) and `20261104163525_purchase.sql` (U8: a payment's `person_id` for purchases made in Soul, read only by that person), all applied to Staging. No PayPal keys or tokens anywhere, only the PayPal account ID (NF-5).
 
 | Entity | Holds | Owner |
 | --- | --- | --- |
 | person | One per anonymous Supabase user: the account in use, last visit | self |
 | paypal_account | PayPal account ID, consent tracking ID, `synced_through` (the import cursor). Prepared has no owner | shared (prepared) or one person |
-| payment | Copy of a kept PayPal row: transaction ID, date, amount, name, payee, event code, category (`null` until categorised, `unknown` when unsure) | the account, so prepared payments are shared |
+| payment | Copy of a kept PayPal row: transaction ID, date, amount, name, payee, event code, category (`null` until categorised, `unknown` when unsure). A purchase made in Soul is added from the capture (capture ID as transaction ID) with the person who made it | the account, so prepared payments are shared; a purchase made in Soul only its person |
 | left_out_row | Rows Soul skips (T1900, T0300 and others) with the reason | the account |
 | belief | Habit, check, interest, support (payments for someone else, `who`) or told (what the person said, maybe a per-person category); how sure, source, payment IDs, active or stopped, told or confirmed by the person | person + account |
 | chapter + claim | Story chapters and their sentences. Each claim has payment IDs and maybe a belief | person + account |

@@ -24,10 +24,10 @@ export function applyTold(pays: StoryPayment[], told: Told[]): StoryPayment[] {
   );
 }
 
-const money = (n: number) => `$${n.toFixed(2)}`;
-const short = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+export const money = (n: number) => `$${n.toFixed(2)}`;
+export const short = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const toCents = (s: string) => Math.round(Number(s.replace(/,/g, "")) * 100);
-const clip = (s: unknown, max: number) => (typeof s === "string" ? s.replace(/[\p{Cc}\p{Cf}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, max) : "");
+export const clip = (s: unknown, max: number) => (typeof s === "string" ? s.replace(/[\p{Cc}\p{Cf}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, max) : "");
 const sameIds = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
 /** Weeks whose payments differ from what their saved chapter covered, newest first. */
@@ -159,14 +159,22 @@ export const must = async <T>(q: PromiseLike<{ data: T; error: { code?: string }
   return data as NonNullable<T>;
 };
 
-export async function loadPayments(db: SupabaseClient, accountId: string): Promise<StoryPayment[]> {
-  const rows = await must(db.from("payment").select("id, paypal_txn_id, occurred_at, amount, currency, name, payee, event_code, category").eq("account_id", accountId).order("occurred_at").limit(2000));
+/**
+ * The account's payments this person can see: the imported ones and their own purchases made in Soul (U8).
+ * RLS does this for a session; with the secret client (the daily job) pass the person.
+ */
+export async function loadPayments(db: SupabaseClient, accountId: string, personId?: string): Promise<StoryPayment[]> {
+  let q = db.from("payment").select("id, paypal_txn_id, occurred_at, amount, currency, name, payee, event_code, category").eq("account_id", accountId);
+  if (personId) q = q.or(`person_id.is.null,person_id.eq.${personId}`);
+  const rows = await must(q.order("occurred_at").limit(2000));
   return rows.map((r) => ({ ...r, amount: Number(r.amount) }));
 }
 
 /** This person's active told beliefs, oldest change first, so applying them in order lets the newest win. */
-export async function loadTold(db: SupabaseClient, accountId: string): Promise<Told[]> {
-  const rows = await must(db.from("belief").select("id, key, text, who, category, payment_ids").eq("account_id", accountId).eq("active", true).in("kind", ["support", "told"]).order("updated_at"));
+export async function loadTold(db: SupabaseClient, accountId: string, personId?: string): Promise<Told[]> {
+  let q = db.from("belief").select("id, key, text, who, category, payment_ids").eq("account_id", accountId).eq("active", true).in("kind", ["support", "told"]);
+  if (personId) q = q.eq("person_id", personId);
+  const rows = await must(q.order("updated_at"));
   return rows.map((b) => ({ id: b.id, key: b.key, text: b.text, who: b.who, category: b.category, paymentIds: b.payment_ids }));
 }
 
@@ -262,7 +270,7 @@ export async function readStory(db: SupabaseClient, accountId: string) {
   const [raw, told, chapters, beliefs, corrections] = await Promise.all([
     loadPayments(db, accountId),
     loadTold(db, accountId),
-    must(db.from("chapter").select("id, title, starts_on, ends_on, is_new, suggestion, claim(id, position, text, payment_ids, belief_id, rewritten)").eq("account_id", accountId).order("ends_on", { ascending: false }).order("created_at", { ascending: false })),
+    must(db.from("chapter").select("id, title, starts_on, ends_on, is_new, suggestion, claim(id, position, text, payment_ids, belief_id, rewritten)").eq("account_id", accountId).order("ends_on", { ascending: false }).order("is_new", { ascending: false }).order("created_at", { ascending: false })),
     must(db.from("belief").select("id, kind, text, sureness, source, payment_ids, active").eq("account_id", accountId).eq("active", true).order("created_at")),
     must(db.from("correction").select("claim_id, claim_before, claim_after, notes").eq("account_id", accountId).is("seen_at", null).is("undone_at", null).not("claim_id", "is", null).order("created_at", { ascending: false }).limit(1)),
   ]);
@@ -270,11 +278,12 @@ export async function readStory(db: SupabaseClient, accountId: string) {
   const payments = all.map(paymentView).reverse();
   const [latest] = corrections;
   const change: Change | null = latest ? { claimId: latest.claim_id, before: latest.claim_before ?? "", after: latest.claim_after ?? "", notes: latest.notes } : null;
-  const story: Chapter[] = chapters.map((c) => ({
+  // A purchase's chapter (U8) is new until a later chapter goes above it.
+  const story: Chapter[] = chapters.map((c, i) => ({
     id: c.id,
     title: c.title,
     when: c.starts_on === c.ends_on ? short(c.starts_on) : `${short(c.starts_on)} – ${short(c.ends_on)}`,
-    fresh: c.is_new,
+    fresh: c.is_new && i === 0,
     suggest: c.suggestion ?? undefined,
     claims: [...(c.claim as { id: string; position: number; text: string; payment_ids: string[]; belief_id: string | null; rewritten: boolean }[])]
       .sort((a, b) => a.position - b.position)
