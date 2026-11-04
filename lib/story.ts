@@ -103,7 +103,7 @@ Rules:
 - A payment named "a payment I can't identify" stays that. Never guess what any payment was, who it was for or why, beyond what the data says.`;
 
 /** Amounts written as $12.34 in a sentence, in cents. */
-const amountsIn = (text: string) => [...text.matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)/g)].map((m) => toCents(m[1]));
+export const amountsIn = (text: string) => [...text.matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)/g)].map((m) => toCents(m[1]));
 
 /** Turns the LLM's answer into chapters, keeping only sentences with payments behind them and figures from code. */
 export function readChapters(answer: string, brief: ReturnType<typeof briefFor>, all: StoryPayment[]): WrittenChapter[] {
@@ -239,6 +239,19 @@ export async function buildStory(db: SupabaseClient, personId: string, accountId
   return { written: written.length, stale: stale.length };
 }
 
+/** A payment as the evidence sheet shows it. */
+export const paymentView = (p: StoryPayment): Payment => ({
+  id: p.id,
+  txn: p.paypal_txn_id,
+  item: paymentName(p),
+  payee: p.payee ?? "",
+  category: categoryView(p.category).name,
+  icon: categoryView(p.category).icon,
+  amount: p.amount,
+  date: short(p.occurred_at),
+  forWho: p.for_who ? "support" : "you",
+});
+
 const SURE: Record<Sureness, Memory["sure"]> = { not_sure: "Not Sure", fairly_sure: "Fairly Sure", sure: "Sure" };
 
 /**
@@ -254,9 +267,7 @@ export async function readStory(db: SupabaseClient, accountId: string) {
     must(db.from("correction").select("claim_id, claim_before, claim_after, notes").eq("account_id", accountId).is("seen_at", null).is("undone_at", null).not("claim_id", "is", null).order("created_at", { ascending: false }).limit(1)),
   ]);
   const all = applyTold(raw, told);
-  const payments: Payment[] = all
-    .map((p) => ({ id: p.id, txn: p.paypal_txn_id, item: paymentName(p), payee: p.payee ?? "", category: categoryView(p.category).name, icon: categoryView(p.category).icon, amount: p.amount, date: short(p.occurred_at), forWho: p.for_who ? ("support" as const) : ("you" as const) }))
-    .reverse();
+  const payments = all.map(paymentView).reverse();
   const [latest] = corrections;
   const change: Change | null = latest ? { claimId: latest.claim_id, before: latest.claim_before ?? "", after: latest.claim_after ?? "", notes: latest.notes } : null;
   const story: Chapter[] = chapters.map((c) => ({

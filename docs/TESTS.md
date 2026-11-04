@@ -87,12 +87,12 @@ Latest run: 2026-11-04, U1: T-1.1 to T-1.5 ✅. Before that, 2026-11-03, U0: T-0
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-7.1 | AC-7.1 | e2e golden | After the groceries correction, open `/chat`. Ask about the groceries. Tap a cited payment. | The answer uses the corrected belief. The cited payments open in the evidence sheet. | ⏭ | |
-| T-7.2 | AC-7.2 | e2e | On `/chat`, ask about flights. | Soul says it has no evidence and states nothing about flights. | ⏭ | |
-| T-7.3 | AC-7.3 | unit | Send a question after 12 earlier turns with a mocked LLM. | The prompt holds only the last 10 questions and answers, active beliefs, and the totals and payments code found. | ⏭ | |
-| T-7.4 | AC-7.4 | unit | Send a 301-character question. | It is refused with a message. The LLM mock is called 0 times. | ⏭ | |
-| T-7.5 | AC-7.5 | unit | Send 30 questions, then a 31st. Move the clock past 00:00 UTC and send again. | The 31st is refused. The next one after 00:00 UTC is accepted. | ⏭ | |
-| T-7.6 | AC-7.6 | e2e | Ask a question on `/chat`. Leave and return to `/chat`. | The earlier questions and answers show. | ⏭ | |
+| T-7.1 | AC-7.1 | e2e golden | After the groceries correction, open `/chat`. Ask about the groceries. Tap a cited payment. | The answer uses the corrected belief. The cited payments open in the evidence sheet. | ✅ | Chrome Nov 4: "…the weekly groceries you bought for your mum on Nov 2, which came to $46.20. You told me you buy them for her…", chip opens the evidence sheet with PayPal ID 3K127305HX3890339 · `tests/chat.test.ts` (Staging) |
+| T-7.2 | AC-7.2 | e2e | On `/chat`, ask about flights. | Soul says it has no evidence and states nothing about flights. | ✅ | Chrome Nov 4: code's "I can't find a payment about that, so I won't guess…", no LLM call in the log · `tests/chat.test.ts` |
+| T-7.3 | AC-7.3 | unit | Send a question after 12 earlier turns with a mocked LLM. | The prompt holds only the last 10 questions and answers, active beliefs, and the totals and payments code found. | ✅ | `tests/chat.test.ts` "what the LLM gets" |
+| T-7.4 | AC-7.4 | unit | Send a 301-character question. | It is refused with a message. The LLM mock is called 0 times. | ✅ | `tests/chat.test.ts`; live 422 with the message |
+| T-7.5 | AC-7.5 | unit | Send 30 questions, then a 31st. Move the clock past 00:00 UTC and send again. | The 31st is refused. The next one after 00:00 UTC is accepted. | ✅ | `tests/chat.test.ts` "refuses the 31st question" |
+| T-7.6 | AC-7.6 | e2e | Ask a question on `/chat`. Leave and return to `/chat`. | The earlier questions and answers show. | ✅ | Chrome Nov 4: three questions and answers back after reload · `tests/chat.test.ts` (Staging) |
 
 ## Phase E: New chapter and action
 
@@ -168,7 +168,7 @@ One click-through in this order. Run it at both widths.
 | 3 | T-4.4 | Tap a sentence. Evidence sheet shows date, amount and transaction ID. | ✅ | ⏭ |
 | 4 | T-5.1 | Correct the groceries sentence. Chapter rewrites, changed sentence is pink. | ✅ | ⏭ |
 | 5 | T-5.2 | Here's What Changed lists old and new sentence and totals. | ✅ | ⏭ |
-| 6 | T-7.1 | Ask about the groceries on `/chat`. Answer uses the correction and cites payments. | ⏭ | ⏭ |
+| 6 | T-7.1 | Ask about the groceries on `/chat`. Answer uses the correction and cites payments. | ✅ | ⏭ |
 | 7 | T-8.1 | Pay on `/buy`. Status page shows the PayPal link, action waiting. | ⏭ | ⏭ |
 | 8 | T-8.3 | After approval, `/story` shows a new chapter marked new. | ⏭ | ⏭ |
 | 9 | T-9.1 | Chapter suggests sending money, with a label. | ⏭ | ⏭ |

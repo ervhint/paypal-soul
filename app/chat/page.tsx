@@ -1,32 +1,40 @@
 "use client";
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { post } from "@/lib/use-api";
-import { PaymentRow } from "@/components/ui";
-import type { Reply } from "@/lib/mock";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { post, useApi } from "@/lib/use-api";
+import { PaymentRow, Sheet, money } from "@/components/ui";
+import type { Payment } from "@/lib/mock";
+import { titleCase } from "@/lib/title-case";
 
-type Msg = { role: "you"; text: string } | ({ role: "soul" } & Reply);
+type Msg = { role: "user" | "soul"; text: string; sources: Payment[]; none: boolean };
 
+const CHIPS = 5; // cited payments shown under an answer; the evidence sheet lists them all
 const STARTERS = ["Why Do Groceries Keep Showing Up?", "How Much Did I Spend on Myself?", "Tell Me About My Flights"];
 
 export default function ChatPage() {
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const { data, setData, loaded } = useApi<{ messages: Msg[] }>("/api/chat");
+  const msgs = data?.messages ?? [];
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<Msg | null>(null);
   const end = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(null), []);
 
   useEffect(() => {
-    end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [msgs, busy]);
+    end.current?.scrollIntoView({ behavior: loaded ? "smooth" : "auto", block: "end" });
+  }, [msgs.length, busy, loaded]);
 
+  const add = (m: Msg) => setData((d) => ({ messages: [...(d?.messages ?? []), m] }));
   const ask = async (q: string) => {
     if (!q.trim() || busy) return;
-    setMsgs((m) => [...m, { role: "you", text: q }]);
+    add({ role: "user", text: q, sources: [], none: false });
     setText("");
     setBusy(true);
-    const r: Reply = await (await post("/api/chat", { message: q })).json();
+    const r = await post("/api/chat", { message: q })
+      .then((res) => res.json())
+      .catch(() => ({ status: "error", message: "I couldn't reach Soul just now. Ask again in a moment." }));
     setBusy(false);
-    setMsgs((m) => [...m, { role: "soul", ...r }]);
+    // A refusal or a failed answer shows here only; it isn't saved or counted.
+    add(r.status === "answered" ? { role: "soul", text: r.text, sources: r.sources, none: r.none } : { role: "soul", text: r.message, sources: [], none: true });
   };
 
   return (
@@ -37,7 +45,7 @@ export default function ChatPage() {
 
       <div className="chat" aria-live="polite">
         {msgs.map((m, i) =>
-          m.role === "you" ? (
+          m.role === "user" ? (
             <div key={i} className="msg you">{m.text}</div>
           ) : (
             <div key={i} className={`msg soul${m.none ? " none" : ""}`}>
@@ -45,10 +53,17 @@ export default function ChatPage() {
               {m.sources.length > 0 && (
                 <>
                   <p className="sources-title">Based on {m.sources.length === 1 ? "This Payment" : `These ${m.sources.length} Payments`}</p>
-                  <ul className="sources">{m.sources.map((p) => <PaymentRow key={p.id} p={p} />)}</ul>
+                  <div className="chips">
+                    {m.sources.slice(0, CHIPS).map((p) => (
+                      <button key={p.id} className="pay-chip" onClick={() => setOpen(m)}>
+                        <i className={`fa-solid fa-${p.icon}`} aria-hidden="true" />
+                        {titleCase(p.item)} · {p.date} · {money(p.amount)}
+                      </button>
+                    ))}
+                    {m.sources.length > CHIPS && <button className="pay-chip" onClick={() => setOpen(m)}>+{m.sources.length - CHIPS} More</button>}
+                  </div>
                 </>
               )}
-              {m.action && <Link className="btn" style={{ marginTop: 16 }} href={m.action.href}>{m.action.label}</Link>}
             </div>
           ),
         )}
@@ -62,7 +77,7 @@ export default function ChatPage() {
 
       <div className="composer">
         <div className="composer-in">
-          {msgs.length === 0 && (
+          {loaded && msgs.length === 0 && (
             <div className="chips">
               {STARTERS.map((s) => <button key={s} className="chip" onClick={() => ask(s)}>{s}</button>)}
             </div>
@@ -73,6 +88,17 @@ export default function ChatPage() {
           </form>
         </div>
       </div>
+
+      <Sheet open={!!open} onClose={close} title="Payments behind this answer">
+        {open && (
+          <>
+            <p className="eyebrow">Why I Said This</p>
+            <h2>{open.text}</h2>
+            <p className="why">{open.sources.length === 1 ? "One payment says so." : `${open.sources.length} payments say so.`}</p>
+            <ul className="pays">{open.sources.map((p) => <PaymentRow key={p.id} p={p} />)}</ul>
+          </>
+        )}
+      </Sheet>
     </div>
   );
 }

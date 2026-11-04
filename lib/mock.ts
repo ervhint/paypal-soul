@@ -38,7 +38,6 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 const seed = () => ({
   source: "prepared" as "prepared" | "own",
   connected: false,
-  asked: 0,
   who: "your mum",
   actions: [] as Action[],
   corrected: false,
@@ -162,39 +161,4 @@ export function settleAction(id: string, outcome: "completed" | "cancelled" | "e
     sendMoney(a.txn);
   } else purchase(a.txn);
   return a;
-}
-
-export type Reply = { text: string; sources: Payment[]; none?: boolean; action?: { label: string; href: string } };
-
-export function chat(message: string): Reply {
-  const s = db();
-  if (++s.asked > 30) return { text: "That's your 30 questions for today. Your story and memory still work, and you can ask again tomorrow.", sources: [], none: true };
-  const by = (...ids: string[]) => s.payments.filter((p) => ids.includes(p.id));
-  const q = message.toLowerCase();
-  const total = (ps: Payment[]) => money(ps.reduce((t, p) => t + p.amount, 0));
-  if (/grocer|food|mum|mom|basket/.test(q)) {
-    const ps = by("P-1042", "P-1046");
-    return s.corrected
-      ? {
-          text: `Groceries went to ${s.who}: two payments, ${total(ps)} together. You told me so today, so I don't count them as spending on you.`,
-          sources: ps,
-          action: { label: `Send ${titleCase(s.who)} $25.00`, href: "/action/confirm" },
-        }
-      : { text: `Two grocery payments, ${total(ps)} together. I think they're for you, but I'm not sure. Tell me if I'm wrong.`, sources: ps };
-  }
-  if (/coffee|morning/.test(q)) {
-    const ps = by("P-1041", "P-1043");
-    return { text: `Two coffees in two days, ${total(ps)}. That looks like a morning habit, though two days is early to be sure.`, sources: ps };
-  }
-  if (/bus|transport|commute/.test(q)) return { text: "One bus fare of $2.40 on Nov 1. One payment isn't a pattern yet.", sources: by("P-1044") };
-  if (/data|mobile|plan|phone/.test(q)) return { text: "Your mobile data is a daily plan. It charged $12.80 on Nov 1 and renews on its own.", sources: by("P-1045") };
-  if (/spen|total|how much/.test(q)) {
-    const ps = s.payments.filter((p) => p.forWho === "you");
-    return { text: `${total(ps)} on you across ${ps.length} payments so far.${s.corrected ? " That leaves out the groceries you told me were for " + s.who + "." : ""}`, sources: ps };
-  }
-  return {
-    text: `I can't find a payment that answers that, so I won't guess. I can see ${s.payments.length} sandbox payments: coffee, groceries, bus and mobile data.`,
-    sources: [],
-    none: true,
-  };
 }

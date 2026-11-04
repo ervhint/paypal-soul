@@ -30,7 +30,7 @@ The browser talks only to the BFF. The BFF talks to PayPal, Supabase and OpenRou
 Folders:
 - `app/` pages, `app/api/` BFF routes
 - `components/` shared UI (`shell.tsx` header and menu, `ui.tsx` primitives)
-- `lib/` server and shared code. `mock.ts` is the prototype store; each unit replaces its part and `mock.ts` goes when empty. Built: `supabase.ts` (session and secret clients, U1), `session.ts` (session client from request cookies), `paypal.ts` (token, transactions; orders and captures in U8), `import.ts` (31-day windows, rows left out, cursor, U2), `categories.ts` (the user's fixed list, vague names, LLM pick, only uncategorised rows, U3), `llm.ts` (OpenRouter `askJson`, Haiku 5.5, payment text as data, token log, U3), `totals.ts` (sums, repeats, habit sureness, weeks, U4), `story.ts` (one chapter per week, rewritten only when its payments change; sentences need payments and code's figures; habits saved as beliefs, what the person told Soul laid over the payments, U4, U5), `correct.ts` (correction read by the LLM, support or told belief, rewrite, Here's What Changed by code, Looks Right, U5)
+- `lib/` server and shared code. `mock.ts` is the prototype store; each unit replaces its part and `mock.ts` goes when empty. Built: `supabase.ts` (session and secret clients, U1), `session.ts` (session client from request cookies), `paypal.ts` (token, transactions; orders and captures in U8), `import.ts` (31-day windows, rows left out, cursor, U2), `categories.ts` (the user's fixed list, vague names, LLM pick, only uncategorised rows, U3), `llm.ts` (OpenRouter `askJson`, Haiku 5.5, payment text as data, token log, U3), `totals.ts` (sums, repeats, habit sureness, weeks, U4), `story.ts` (one chapter per week, rewritten only when its payments change; sentences need payments and code's figures; habits saved as beliefs, what the person told Soul laid over the payments, U4, U5), `correct.ts` (correction read by the LLM, support or told belief, rewrite, Here's What Changed by code, Looks Right, U5), `chat.ts` (code finds a question's payments and figures, no LLM call when nothing matches, last 10 questions and answers, cited payments and code's amounts only, 300 characters and 30 a day, U7)
 - `supabase/migrations/` SQL migrations
 - `tests/` Vitest unit and integration tests
 
@@ -42,7 +42,7 @@ BFF routes (now on mock data unless marked):
 | `POST /api/sync` | Refresh From PayPal on open and Refresh, reads only past the cursor, categorises new payments, then rewrites this person's changed weeks, even when PayPal fails (real) | U2, U3, U4 |
 | `POST/PATCH /api/correct` | correction, clarifying question, rewritten chapter; Looks Right (real) | U5 |
 | `GET/PATCH /api/memory` | beliefs; edit or Stop Using This | U6 |
-| `GET/POST /api/chat` | history; grounded answer with limits | U7 |
+| `GET/POST /api/chat` | history; grounded answer with limits (real) | U7 |
 | `GET/POST/PATCH /api/action` | status; create sandbox order; capture or settle | U8, U9 |
 | `DELETE /api/me` (planned) | Delete My Data | U11 |
 | `GET /api/cron` (planned) | daily job with `CRON_SECRET`: import, captures, 30-day cleanup, keep Supabase awake | U11 |
