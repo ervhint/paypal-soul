@@ -3,6 +3,8 @@
 // to the rows left out with a reason, so no total counts them. Saving is per window, so a failed read
 // resumes where it stopped.
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { categoriseAccount, supabaseCategoryStore } from "@/lib/categories";
+import { askJson } from "@/lib/llm";
 import { readTransactions, type Page, type PayPalTxn } from "@/lib/paypal";
 import { secretClient } from "@/lib/supabase";
 
@@ -119,5 +121,8 @@ export async function syncAccount(accountId: string) {
     const { error } = await admin.from("paypal_account").update({ paypal_account_id: account.paypal_account_id }).eq("id", accountId);
     if (error) throw error;
   }
-  return importAccount(account, readTransactions, supabaseStore(admin));
+  const result = await importAccount(account, readTransactions, supabaseStore(admin));
+  // A failed LLM call doesn't fail the sync: those payments keep no category and are tried next time.
+  const categorised = await categoriseAccount(accountId, supabaseCategoryStore(admin), askJson).catch((e) => (console.error("categories failed", e), 0));
+  return { ...result, categorised };
 }
