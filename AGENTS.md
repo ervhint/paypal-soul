@@ -9,7 +9,7 @@ Status: `PROGRESS.md` · Plan: `docs/PLAN.md`
 - Claude in Chrome for all browser work: research, reading pages and docs, opening localhost, checking pages while building, screenshots, design reviews, console and network debugging, testing and Vercel checks. Never the built-in browser pane (`mcp__Claude_Browser__*`, including `preview_start`) or Playwright. During research only look: never sign in, submit forms or change anything. If Chrome isn't connected, say so and ask.
 - PayPal sandbox only. Credentials stay in the gitignored `.env.local`.
 - This is a fresh build. Don't copy code, scripts, data or settings from `paypal-soul-01` or the `VibeCoding` workspace.
-- Repo: `ervhint/paypal-soul`, private. It must be public with an open source license before submission.
+- Repo: `ervhint/paypal-soul`, private until about Nov 12, then public under MIT. Steps are in `PROGRESS.md`, under Going public. CI is paused by GitHub billing, so local tests are the check.
 
 ## Stack
 Next.js 16 (App Router) + TypeScript 7 + Tailwind 4 · BFF in Route Handlers (`app/api/*`) · Supabase Postgres with RLS and anonymous users · Vitest 5 · GitHub Actions · Vercel from P7.

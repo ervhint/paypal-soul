@@ -551,6 +551,7 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 5 | Chat drops to 5 questions a day per person, stated on the page, with a total spending cap of about $20 | Each question costs more now, the user has $29 of credit, and being open about the limit is better than running out |
 | Nov 5 | The LLM still reads at most 60 rows, and the answer says so past 60 | Thousands of payments in a month can't go to the LLM. Totals cover everything, and Soul is open about the rest |
 | Nov 5 | The $1 "Soul Send Money Test" row stays in the prepared story | The user's call |
+| Nov 5 | Repo stays private until about Nov 12, then goes public under the MIT license | Going public earlier gives away the plan for little gain. MIT is short, widely known and meets the open source rule |
 
 ## 6. Open questions
 1. Settled at G5: anonymous Supabase users for the private copy.
