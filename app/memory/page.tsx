@@ -58,7 +58,7 @@ export default function MemoryPage() {
       {!data ? (
         <Skeleton lines={4} />
       ) : !data.memory.length ? (
-        <p className="note">I don&rsquo;t believe anything yet. A belief appears here when a payment repeats or you correct a sentence in your story.</p>
+        <p className="note">I don&rsquo;t believe anything yet. A belief appears here when a payment or a kind of spending repeats, or you correct a sentence in your story.</p>
       ) : (
         <ul className="mem">
           {data.memory.map((m) => {
@@ -70,6 +70,7 @@ export default function MemoryPage() {
                 <div className="mem-meta">
                   <span>{m.sure}</span>
                   <span>{m.source}</span>
+                  {m.kind === "interest" && <span className="tag plain">Interest</span>}
                   {m.source.startsWith("You Told Me") && <span className="tag">Updated</span>}
                   {!m.active && <span className="tag plain">Not Used</span>}
                 </div>

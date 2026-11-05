@@ -242,11 +242,14 @@ export async function correct(db: SupabaseClient, personId: string, accountId: s
 async function restore(db: SupabaseClient, personId: string, accountId: string, u: UndoPoint) {
   for (const { id, ...row } of u.beliefs) await must(db.from("belief").update(row).eq("id", id).eq("account_id", accountId));
   await must(db.from("chapter").delete().eq("account_id", accountId).in("week", u.weeks));
+  // A noticed interest can have gone since the copy was made; the next build brings it back if it still holds.
+  const linked = [...new Set(u.chapters.flatMap((c) => c.claim.flatMap((k) => k.belief_id ?? [])))];
+  const alive = new Set((await must(db.from("belief").select("id").eq("account_id", accountId).in("id", linked))).map((b) => b.id as string));
   for (const { claim, ...ch } of u.chapters) {
     const { data, error } = await db.from("chapter").insert({ person_id: personId, account_id: accountId, ...ch }).select("id").single();
     if (error?.code === "23505") continue; // another tab wrote this week first
     if (error) throw error;
-    await must(db.from("claim").insert(claim.map((c) => ({ ...c, chapter_id: data.id, person_id: personId }))));
+    await must(db.from("claim").insert(claim.map((c) => ({ ...c, belief_id: c.belief_id && alive.has(c.belief_id) ? c.belief_id : null, chapter_id: data.id, person_id: personId }))));
   }
   if (u.created) await must(db.from("belief").delete().eq("id", u.created).eq("account_id", accountId));
 }

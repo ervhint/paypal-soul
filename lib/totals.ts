@@ -1,6 +1,6 @@
 // Totals, repeats and habits (U4). Code does every sum and count here, never the LLM (NF-8); the story
 // only gets these figures to write from. Days are UTC dates, weeks start on Monday (UTC).
-import { categoryLabel, paymentName, UNKNOWN_PAYMENT } from "@/lib/categories";
+import { categoryLabel, categoryView, paymentName, UNKNOWN_PAYMENT } from "@/lib/categories";
 
 export type StoryPayment = {
   id: string;
@@ -78,6 +78,35 @@ export function repeats(pays: StoryPayment[], stopped: string[] = []): Repeat[] 
       daily,
       sureness: habitSureness(days.length, daily),
     });
+  }
+  return out.sort((a, b) => b.days - a.days || b.spent - a.spent);
+}
+
+/** The start of an interest belief's key, followed by its category (U13). */
+export const INTEREST = "interest:";
+export type Interest = { key: string; category: string; days: number; payments: number; spent: number; paymentIds: string[]; sureness: Sureness };
+
+// Groups a person chooses to spend on. Bills, loans, transport, groceries and transfers repeat because
+// life needs them, so they say nothing about what someone likes.
+const CHOSEN = ["education.", "food_drinks.", "gift_charity.", "health_personal_care.", "hobby_entertainment.", "shopping.", "sports.", "traveling."];
+
+/**
+ * Categories the person keeps spending on for themselves, most days first, with the same sureness as a habit
+ * (AC-13.1). Pass payments with what they told Soul applied: what was for someone else isn't their interest.
+ * `stopped` holds the full keys of interests the person told Soul to stop using.
+ */
+export function interests(pays: StoryPayment[], stopped: string[] = []): Interest[] {
+  const groups = new Map<string, StoryPayment[]>();
+  for (const p of pays) {
+    if (p.amount <= 0 || p.for_who || !p.category || !CHOSEN.some((c) => p.category!.startsWith(c))) continue;
+    groups.get(p.category)?.push(p) ?? groups.set(p.category, [p]);
+  }
+  const out: Interest[] = [];
+  for (const [category, ps] of groups) {
+    const days = new Set(ps.map((p) => dayOf(p.occurred_at))).size;
+    const sureness = habitSureness(days, false);
+    if (!sureness || stopped.includes(`${INTEREST}${category}`)) continue;
+    out.push({ key: `${INTEREST}${category}`, category: categoryView(category).name, days, payments: ps.length, spent: sum(ps), paymentIds: ps.map((p) => p.id), sureness });
   }
   return out.sort((a, b) => b.days - a.days || b.spent - a.spent);
 }

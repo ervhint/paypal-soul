@@ -6,8 +6,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { interpret, MAX_SAID, movedIds, nextTold, saveCorrection, saveMoved, undoPoint, WHO_QUESTION, type Reading, type Result } from "@/lib/correct";
 import type { AskJson } from "@/lib/llm";
-import { applyTold, BELIEF_COLUMNS, beliefView, clip, HABIT, loadPayments, loadStopped, loadTold, must, paymentView, saveChapters, short, writeChapters, type Told } from "@/lib/story";
-import { weekOf, type StoryPayment } from "@/lib/totals";
+import { applyTold, BELIEF_COLUMNS, beliefView, clip, HABIT, loadPayments, loadStopped, loadTold, must, paymentView, saveChapters, short, stopKey, writeChapters, type Told } from "@/lib/story";
+import { INTEREST, weekOf, type StoryPayment } from "@/lib/totals";
 
 const FAILED = "I couldn't rewrite your story just now, so nothing changed. Try again in a moment.";
 const LOST = "I can't find that belief any more. Refresh the page and try again.";
@@ -16,6 +16,7 @@ const error = (message: string): Result => ({ status: "error", message });
 
 type Row = { id: string; kind: string; key: string | null; text: string; who: string | null; category: string | null; payment_ids: string[]; active: boolean };
 const isTold = (b: Row) => b.kind === "support" || b.kind === "told";
+const noticed = (key: string | null) => !!key && (key.startsWith(HABIT) || key.startsWith(INTEREST));
 const toTold = (b: Row): Told => ({ id: b.id, key: b.key, text: b.text, who: b.who, category: b.category, paymentIds: b.payment_ids });
 
 /** Every belief, stopped ones too, with the payments as this person sees them, for the chips. */
@@ -41,9 +42,9 @@ async function rewrite(ids: string[], after: StoryPayment[], ask: AskJson, told:
 /** Who the payments are for after an edit: whoever it names, or nobody if they say it was theirs, or as before. */
 export const whoAfter = (r: Reading, was: string | null) => r.who ?? (r.forSelf ? null : was);
 
-/** The belief's key after an edit. A habit keeps its own, so a rebuild finds it and leaves the person's words. */
+/** The belief's key after an edit. A habit or interest keeps its own, so a rebuild finds it and leaves the person's words. */
 export function keyAfter(b: Pick<Row, "key" | "who">, who: string | null, category: string | null) {
-  if (b.key?.startsWith(HABIT) || who === b.who) return b.key;
+  if (noticed(b.key) || who === b.who) return b.key;
   return who && !category ? `support:${who.toLowerCase()}` : null;
 }
 
@@ -78,7 +79,8 @@ export async function editBelief(db: SupabaseClient, personId: string, accountId
   const next = nextTold(told, add);
   const after = applyTold(all, next);
 
-  const done = await rewrite(b.payment_ids, after, ask, next, stopped);
+  // Their words replace what Soul noticed, so the rewrite mustn't state the interest as well.
+  const done = await rewrite(b.payment_ids, after, ask, next, b.key?.startsWith(INTEREST) ? [...stopped, b.key] : stopped);
   const main = done?.written[0];
   if (!done || !main) return error(FAILED);
   const { data: chapter } = await db.from("chapter").select("title, claim(text, belief_id, payment_ids, position)").eq("account_id", accountId).eq("week", done.weeks[0]).maybeSingle();
@@ -112,8 +114,8 @@ export async function setUsing(db: SupabaseClient, personId: string, accountId: 
   if (b.active === active) return { status: "done" };
 
   const [all, told, wasStopped] = await Promise.all([loadPayments(db, accountId), loadTold(db, accountId), loadStopped(db, accountId)]);
-  const repeat = b.key?.startsWith(HABIT) ? b.key.slice(HABIT.length) : null;
-  const stopped = [...wasStopped.filter((k) => k !== repeat), ...(repeat && !active ? [repeat] : [])];
+  const stop = noticed(b.key) ? stopKey(b.key!) : null;
+  const stopped = [...wasStopped.filter((k) => k !== stop), ...(stop && !active ? [stop] : [])];
   const next = !active ? told.filter((t) => t.id !== b.id) : isTold(b) ? nextTold(told, toTold(b)) : told;
 
   const done = await rewrite(b.payment_ids, applyTold(all, next), ask, next, stopped);
