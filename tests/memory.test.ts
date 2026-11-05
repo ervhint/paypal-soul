@@ -3,9 +3,10 @@
 // prepared payments edits a belief, stops it, rebuilds, asks chat, and uses it again.
 import type { CookieMethodsServer } from "@supabase/ssr";
 import { afterAll, describe, expect, it } from "vitest";
-import { answer, briefFor as chatBrief, chatStore, findPayments } from "@/lib/chat";
+import { answer, chatStore } from "@/lib/chat";
+import { runFunction, type Ledger } from "@/lib/chat-functions";
 import { correct, undoCorrection, type Reading } from "@/lib/correct";
-import type { AskJson } from "@/lib/llm";
+import type { AskJson, AskTools } from "@/lib/llm";
 import { editBelief, keyAfter, readMemory, setUsing, whoAfter } from "@/lib/memory";
 import { briefFor, buildStory, readStory } from "@/lib/story";
 import { choosePrepared, preparedAccountId, secretClient, sessionClient } from "@/lib/supabase";
@@ -48,11 +49,11 @@ describe("a stopped habit", () => {
     expect(briefFor(["2026-11-02"], coffee).data.weeks[0].repeats).toHaveLength(1);
   });
 
-  it("leaves the repeats chat gets and finds", () => {
-    const found = findPayments("coffee", coffee)!;
-    expect(chatBrief("coffee", found, [], [], ["morning coffee"]).data.found.repeats).toEqual([]);
-    expect(findPayments("any habits?", coffee)?.how).toBe("repeats");
-    expect(findPayments("any habits?", coffee, [], ["morning coffee"])?.how).toBe("all");
+  it("leaves the repeats chat gets", async () => {
+    const none = async () => [];
+    const ledger = (stopped: string[]): Ledger => ({ today: "2026-11-05", payments: coffee, stopped, beliefs: none, chapters: none, corrections: none, actions: none, leftOut: none, lastRead: async () => null });
+    expect((await runFunction("list_repeats", {}, ledger([]))).data.found).toHaveLength(1);
+    expect((await runFunction("list_repeats", {}, ledger(["morning coffee"]))).data.found).toEqual([]);
   });
 });
 
@@ -189,7 +190,8 @@ describe("Memory on Staging", () => {
 
     const seen: string[] = [];
     const chatAsk: AskJson = async (_, __, user) => (seen.push(user), JSON.stringify({ answer: "They were groceries.", payments: ["p1"] }));
-    expect((await answer(chatStore(p.db(), p.id, p.accountId), "Who are the groceries for?", chatAsk)).status).toBe("answered");
+    const pick: AskTools = async () => ({ text: "final", calls: [{ id: "c1", name: "find_payments", args: JSON.stringify({ words: ["groceries"] }) }], message: {} });
+    expect((await answer(chatStore(p.db(), p.id, p.accountId), "Who are the groceries for?", { ask: chatAsk, pick, credit: async () => 10 })).status).toBe("answered");
     expect(seen[0]).not.toContain(belief.text);
     expect(seen[0]).not.toContain("your mum");
   });

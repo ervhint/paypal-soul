@@ -448,7 +448,7 @@ How one question flows:
 4. The writer, Claude Haiku 5.5, gets the question and the results, with no function list, and writes 1 to 3 sentences. It also writes the natural sorry when the picker found no function that fits.
 5. Code checks every amount against the function results, then builds the list under the answer from those results.
 
-The 25 functions:
+The functions (25 planned, 24 built: `sum_fees` is cut, see its row):
 
 | # | Function | Example question |
 | --- | --- | --- |
@@ -468,7 +468,7 @@ The 25 functions:
 | 14 | `cost_over_time` | "What does coffee cost me per year?" |
 | 15 | `what_if_stopped` (stated as math, not advice) | "How much would I save without coffee?" |
 | 16 | `money_in_out` | "Did more come in than go out?" |
-| 17 | `sum_fees` (check first that the data exists; if not, it's cut and Soul says sorry) | "How much did I pay in fees?" |
+| 17 | ~~`sum_fees`~~ cut Nov 5: PayPal's fee is kept only for orders made in Soul, where the receiver pays it, so Soul can't say what a person paid. The picker says `no_data` and Soul says sorry | "How much did I pay in fees?" |
 | 18 | `list_repeats` | "What are my subscriptions, and what do they cost?" |
 | 19 | `get_memory` (option: only the ones Soul is unsure about) | "What do you know about me?", "What are you unsure about?" |
 | 20 | `explain_belief` | "Why do you think that about me?" |
@@ -477,6 +477,8 @@ The 25 functions:
 | 23 | `list_actions` (option: only what's still waiting) | "What did I buy or send through Soul?" |
 | 24 | `list_left_out` | "Why is this payment missing?" |
 | 25 | `data_coverage` | "How far back can you see?", "When did you last read PayPal?" |
+
+Built as planned, with these details: the picker also gets the stores and people, so `words` and `person` can name them. It writes `final` with its calls when they're enough, so most questions take one Opus call, or `more` when it must see results first. With no calls it writes `no_data` (Haiku says sorry) or `off_topic` (code's polite line, no Haiku call). Store names now reach the LLM, as the store grouping needs. An answer thrown out for a made-up figure gets code's line and still counts, since it spent money; a failed call doesn't count. The writer is asked once more when its reply isn't JSON.
 
 The list stops here: the LLM reads it on every question, and overlap is what makes it pick wrong. A new kind of question fits as an option on a function first.
 
@@ -493,7 +495,7 @@ Acceptance:
 - AC-16.8 Given more than 60 payments behind a question, when it's answered, then the LLM reads at most 60 rows, the totals still cover all of them, and the answer says so: "Totals cover all 134 payments. I read the newest 60 in detail." At 60 or fewer nothing is added. A power buyer gets correct totals and an honest note.
 - AC-16.9 Given a question in progress, when each step happens, then the person sees it in plain words, so Chat never looks stuck.
 - AC-16.10 Given 5 questions today, when the 6th is sent, then it's refused until 00:00 UTC, and the Chat page says the limit up front. The 300 characters stay.
-- AC-16.11 Given the total Chat spending cap (about $20 of the credit, see NF-12), when it's reached, then Chat politely says it's done for now and the rest of Soul keeps working. Every LLM call logs its cost.
+- AC-16.11 Given the total Chat spending cap (the OpenRouter key's $20 limit, see NF-12), when under $2 is left on the key, then Chat politely says it's done for now and the rest of Soul keeps working on what's left. Every LLM call logs its cost.
 - AC-16.12 Given a request to cancel, when it's sent, then code's reply answers it with no LLM call, as now.
 - AC-16.13 Given the question list (at least 2 per function and at least 10 attacks), when it runs against the real models, then the score shows how often the right function and the right dates were picked, and the wording matches the labels. Run the picking part only, stopping before the final answer, and rerun only what fails, to save credit.
 Tests: T-16.1–T-16.5 (unit), T-16.6 (integration), T-16.7, T-16.8 (unit), T-16.9 (e2e), T-16.10–T-16.12 (unit), T-16.13 (real models, once)
@@ -547,6 +549,7 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 5 | Rows that aren't spending (money coming in, bank withdrawals, currency conversions) go to rows left out with a reason. | Own accounts can hold them, and they would have counted as negative or false spending |
 | Nov 5 | U14 cut. Chat answers a request to cancel from code, with no LLM call, and points to PayPal's settings | Soul can't cancel or even read a subscription on a connected account, and the prepared ones are shared by every visitor. A fixed reply can never sound as if it was cancelled |
 | Nov 5 | Chat changes to function calling (U16): 25 functions, the LLM picks them and fills their parameters, code runs them. AC-7.2's "no LLM call when nothing matches" goes | Code picked payments by matching words, with no idea of dates, so "this month" returned everything and "any chocolate?" never reached the LLM. The user wants Chat to reflect the real world |
+| Nov 5 | `sum_fees` cut, so 24 functions. Chat's spending cap reads what's left on the OpenRouter key instead of adding up costs in a table, and stops with $2 left | Soul keeps no fee a person paid. Chat rows go when people delete their data, so a sum of them would drift; the key's own figure can't, and needs no migration |
 | Nov 5 | Claude Opus 5.5 at low effort picks functions, Claude Haiku 5.5 writes the sentence. Story and categories stay on Haiku | Picking is the hard part, and the user likes Haiku's straightforward answers. About $0.03 a question, estimated, against $0.07 with Opus for both |
 | Nov 5 | Chat drops to 5 questions a day per person, stated on the page, with a total spending cap of about $20 | Each question costs more now, the user has $29 of credit, and being open about the limit is better than running out |
 | Nov 5 | The LLM still reads at most 60 rows, and the answer says so past 60 | Thousands of payments in a month can't go to the LLM. Totals cover everything, and Soul is open about the rest |

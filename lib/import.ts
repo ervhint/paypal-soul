@@ -12,6 +12,9 @@ const DAY = 86_400_000;
 export const WINDOW_DAYS = 31;
 export const FIRST_IMPORT_DAYS = 183;
 
+/** The reason on a row of money coming in, which Chat counts as money received. */
+export const MONEY_IN = "Money that came in, not something you bought.";
+
 export const LEFT_OUT_LABELS: Record<string, string> = {
   T1900: "General account correction",
   T0300: "Bank deposit to PayPal account",
@@ -60,7 +63,7 @@ export function sortRows(rows: PayPalTxn[]): Sorted {
     else if (i.transaction_event_code === "T0300") funded.push(t);
     else if (i.transaction_status === "D" || i.transaction_status === "V") leftOut.push({ ...base, amount: -amount, reason: "PayPal didn't complete this payment." });
     else if (/^T0[24]/.test(i.transaction_event_code)) leftOut.push({ ...base, amount: Math.abs(amount), reason: "Money moved to your bank or between currencies, not something you bought." });
-    else if (amount > 0) leftOut.push({ ...base, amount, reason: "Money that came in, not something you bought." });
+    else if (amount > 0) leftOut.push({ ...base, amount, reason: MONEY_IN });
     else {
       const name = i.transaction_subject || t.cart_info?.item_details?.[0]?.item_name || i.transaction_note || null;
       payments.push({ ...base, amount: -amount, name, payee: t.payer_info?.payer_name?.alternate_full_name || null });
