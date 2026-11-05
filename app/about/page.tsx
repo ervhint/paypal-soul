@@ -6,7 +6,7 @@ export default function AboutPage() {
   return (
     <div className="wrap narrow">
       <p className="eyebrow">About This Demo</p>
-      <h1 className="display" style={{ marginTop: 12, fontSize: "clamp(32px, 4.6vw, 54px)" }}>The Sandbox, and How Soul Differs From PayPal</h1>
+      <h1 className="display" style={{ marginTop: 12, fontSize: "clamp(32px, 4.6vw, 54px)" }}>The Sandbox, and How Soul Works With PayPal</h1>
       <div className="about">
         <section>
           <h2>What You&rsquo;re Looking At</h2>
@@ -21,7 +21,7 @@ export default function AboutPage() {
           </ul>
         </section>
         <section id="differences">
-          <h2>Differences From PayPal</h2>
+          <h2>How Soul Uses Your PayPal Data</h2>
           <ul>
             <li>Soul leaves out rows that aren&rsquo;t purchases, such as balance corrections and bank funding rows. Counting them would double your spending. You can see them under &ldquo;Why Are Some Rows Missing?&rdquo; on your story.</li>
             <li>A new payment can take up to 3 hours to reach PayPal&rsquo;s report. Purchases made inside Soul show up right away.</li>

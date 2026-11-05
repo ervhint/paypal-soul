@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Payment } from "@/lib/types";
+import { categoryTotals, PAGE } from "@/lib/pay-list";
 import { titleCase } from "@/lib/title-case";
 
 export const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -82,6 +83,25 @@ export const PaymentRow = ({ p }: { p: Payment }) => (
     <span className="pay-amt">{money(p.amount)}</span>
   </li>
 );
+
+/** A list that can run long: category totals first, then the newest payments, 20 at a time. */
+export function PaymentList({ pays }: { pays: Payment[] }) {
+  const [shown, setShown] = useState(PAGE);
+  const cats = categoryTotals(pays);
+  const left = pays.length - shown;
+  return (
+    <>
+      {cats.length > 1 && (
+        <ul className="deal">
+          {cats.map((c) => <li key={c.category}><span>{c.category}</span><b>{money(c.spent)}</b></li>)}
+        </ul>
+      )}
+      {pays.length > PAGE && <p className="sources-title">Showing {Math.min(shown, pays.length)} of {pays.length} Payments, Newest First</p>}
+      <ul className="pays">{[...pays].reverse().slice(0, shown).map((p) => <PaymentRow key={p.id} p={p} />)}</ul>
+      {left > 0 && <button className="btn dark small" style={{ marginTop: 16 }} onClick={() => setShown(shown + PAGE)}>Show {Math.min(PAGE, left)} More</button>}
+    </>
+  );
+}
 
 export function Receipt({ stages, now, bad, amount, title, children }: { stages: string[]; now: number; bad?: boolean; amount: number; title: string; children?: ReactNode }) {
   return (

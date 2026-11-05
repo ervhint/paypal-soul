@@ -1,9 +1,8 @@
 "use client";
-import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/lib/use-api";
-import { Skeleton, Toast, useToast } from "@/components/ui";
+import { PaymentRow, Sheet, Skeleton, Toast, useToast } from "@/components/ui";
 import { titleCase } from "@/lib/title-case";
 import type { Memory, Payment } from "@/lib/types";
 
@@ -23,6 +22,8 @@ export default function MemoryPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [question, setQuestion] = useState<{ question: string; options: string[] } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [shown, setShown] = useState<{ text: string; pays: Payment[]; of: number } | null>(null);
+  const closeShown = useCallback(() => setShown(null), []);
   const router = useRouter();
   const toast = useToast();
 
@@ -76,17 +77,18 @@ export default function MemoryPage() {
                 </div>
                 <div className="mem-pays">
                   {pays.slice(0, CHIPS).map((p) => (
-                    <Link key={p.id} className="pay-chip" href="/story" title={`PayPal ID ${p.txn}`}>
+                    <button key={p.id} type="button" className="pay-chip" title={`PayPal ID ${p.txn}`} onClick={() => setShown({ text: m.text, pays: [p], of: pays.length })}>
                       <i className={`fa-solid fa-${p.icon}`} aria-hidden="true" /> {titleCase(p.item)} · {p.date}
-                    </Link>
+                    </button>
                   ))}
-                  {pays.length > CHIPS && <Link className="pay-chip" href="/story">+{pays.length - CHIPS} More</Link>}
+                  {pays.length > CHIPS && <button type="button" className="pay-chip" onClick={() => setShown({ text: m.text, pays: pays.slice(CHIPS), of: pays.length })}>+{pays.length - CHIPS} More</button>}
                 </div>
               </div>
-              {editing !== m.id && <div className="mem-actions">
+              {/* Hidden, not removed, while editing: its width keeps the payment chips where they are. */}
+              <div className={`mem-actions${editing === m.id ? " held" : ""}`}>
                 {m.active && <button className="btn dark small" disabled={!!busy} onClick={() => { setEditing(m.id); setDraft(m.text); setQuestion(null); }}>Edit</button>}
                 <button className="btn line small" disabled={!!busy} onClick={() => toggle(m)}>{busy === m.id ? "Rewriting Your Story…" : m.active ? "Stop Using This" : "Use Again"}</button>
-              </div>}
+              </div>
               {editing === m.id && (
                 <form onSubmit={(e) => { e.preventDefault(); save(m); }}>
                   <textarea className="field" rows={2} maxLength={300} value={draft} onChange={(e) => { setDraft(e.target.value); setQuestion(null); }} aria-label="Edit belief" autoFocus />
@@ -124,6 +126,16 @@ export default function MemoryPage() {
           <button className="btn line small" style={{ marginTop: 14 }} onClick={() => setDeleting(true)}>Delete My Data</button>
         )}
       </section>
+      <Sheet open={!!shown} onClose={closeShown} title="Payments behind this belief">
+        {shown && (
+          <>
+            <p className="eyebrow">Why I Believe This</p>
+            <h2>{shown.text}</h2>
+            <p className="why">{shown.pays.length} of {shown.of} {shown.of === 1 ? "payment" : "payments"} behind this belief.</p>
+            <ul className="pays">{shown.pays.map((p) => <PaymentRow key={p.id} p={p} />)}</ul>
+          </>
+        )}
+      </Sheet>
       <Toast text={toast.text} />
     </div>
   );

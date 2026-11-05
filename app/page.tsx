@@ -50,14 +50,14 @@ export default function Welcome() {
             <button className="btn" onClick={prepared}>Try It With Our Prepared Data</button>
           </div>
           <div>
-            <p>Your account needs 5 or more payments across at least 7 days, with 1 repeat.</p>
+            <p>For a good story, you&rsquo;ll want 5 or more payments over a week, with 1 repeat.</p>
             <Link className="btn paypal" href="/connect">
               <i className="fa-brands fa-paypal" aria-hidden="true" /> Log In With PayPal <span className="sbx">Sandbox</span>
             </Link>
           </div>
         </div>
         <p className="cta-note anim" style={{ "--d": "0.5s" } as React.CSSProperties}>
-          No real money. <Link className="link" href="/about">How Soul Differs From PayPal</Link>
+          No real money is used.
         </p>
       </div>
       <section className="stats" aria-label="From the prepared story">

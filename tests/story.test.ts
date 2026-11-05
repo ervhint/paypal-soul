@@ -1,5 +1,5 @@
 // Unit: story chapters with a mocked LLM (U4: T-4.1, T-4.6, plus NF-6 and NF-8 on the story).
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { briefFor, readChapters, staleWeeks, writeChapters } from "@/lib/story";
 import type { AskJson } from "@/lib/llm";
 import type { StoryPayment } from "@/lib/totals";
@@ -112,6 +112,39 @@ describe("sentences need payments behind them (T-4.6, NF-7)", () => {
   it("saves no chapter when no sentence survives, and none when the answer isn't usable", async () => {
     expect(readChapters(JSON.stringify({ chapters: [{ week: "2026-11-02", title: "T", claims: [{ text: "Nothing.", payments: [] }] }] }), briefFor(["2026-11-02"], all), all)).toEqual([]);
     expect(await writeChapters(["2026-11-02"], all, async () => "not json")).toEqual([]);
+  });
+
+  const good = (b: Brief) => ({ chapters: [{ week: "2026-11-02", title: "T", claims: [{ text: "Coffee.", payments: [b.weeks[0].paymentRefs[0]] }] }] });
+  const quiet = () => vi.spyOn(console, "error").mockImplementation(() => {});
+
+  it("asks once more when an answer can't be read, and logs why in one string", async () => {
+    const log = quiet();
+    const llm = mockLlm(good);
+    let asked = 0;
+    const ask: AskJson = (...a) => (++asked === 1 ? Promise.resolve("not json") : llm.ask(...a));
+    expect(await writeChapters(["2026-11-02"], all, ask)).toHaveLength(1);
+    expect(asked).toBe(2);
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls[0]).toEqual([expect.stringContaining("story failed")]);
+    log.mockRestore();
+  });
+
+  it("asks once more when no sentence survives the checks, and says so in the log", async () => {
+    const log = quiet();
+    let asked = 0;
+    const llm = mockLlm((b) => (++asked === 1 ? { chapters: [{ week: "2026-11-02", title: "T", claims: [{ text: "Nothing.", payments: [] }] }] } : good(b)));
+    expect(await writeChapters(["2026-11-02"], all, llm.ask)).toHaveLength(1);
+    expect(llm.calls).toHaveLength(2);
+    expect(log.mock.calls[0][0]).toContain("no sentence passed");
+    log.mockRestore();
+  });
+
+  it("stops after the second try", async () => {
+    const log = quiet();
+    let asked = 0;
+    expect(await writeChapters(["2026-11-02"], all, async () => (asked++, "not json"))).toEqual([]);
+    expect(asked).toBe(2);
+    log.mockRestore();
   });
 });
 

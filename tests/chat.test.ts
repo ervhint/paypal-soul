@@ -4,7 +4,7 @@
 // with a support belief asks about the groceries and about flights, and the history reads back.
 import type { CookieMethodsServer } from "@supabase/ssr";
 import { afterAll, describe, expect, it } from "vitest";
-import { answer, asksToCancel, briefFor, cancelReply, chatStore, DAILY_QUESTIONS, findPayments, noEvidence, readAnswer, type Belief, type ChatStore, type Turn } from "@/lib/chat";
+import { answer, asksToCancel, briefFor, cancelReply, chatStore, DAILY_QUESTIONS, findPayments, noEvidence, readAnswer, type Belief, type ChatStore, type Found, type Turn } from "@/lib/chat";
 import type { AskJson } from "@/lib/llm";
 import { applyTold } from "@/lib/story";
 import { choosePrepared, preparedAccountId, secretClient, sessionClient } from "@/lib/supabase";
@@ -189,8 +189,8 @@ describe("checking the answer (NF-7, NF-8)", () => {
   const found = findPayments("groceries", all)!;
   const brief = briefFor("groceries", found, beliefs, []);
   it("keeps only cited payments it was given", () => {
-    const r = readAnswer(JSON.stringify({ answer: "Two grocery payments, $66.20 together.", payments: ["p2", "p9", "p2"] }), brief, found, all);
-    expect(r).toEqual({ text: "Two grocery payments, $66.20 together.", sources: [found.payments[1]], none: false });
+    const r = readAnswer(JSON.stringify({ answer: "The second grocery run.", payments: ["p2", "p9", "p2"] }), brief, found, all);
+    expect(r).toEqual({ text: "The second grocery run.", sources: [found.payments[1]], none: false });
   });
 
   it("drops an answer with an amount code didn't give", () => {
@@ -216,6 +216,52 @@ function browser() {
 const made: string[] = [];
 afterAll(async () => {
   for (const id of made) await secretClient().auth.admin.deleteUser(id);
+});
+
+describe("more payments than the LLM reads", () => {
+  // 70 small payments, oldest first, with the biggest one too old for the newest 60.
+  const many = Array.from({ length: 70 }, (_, i) => pay(`2026-10-${String((i % 28) + 1).padStart(2, "0")}`, "Morning coffee", i === 2 ? 90 : 3, "food_drinks.snacks_drinks"));
+  const spentTotal = "$297.00"; // 69 × $3.00 + $90.00
+  const big = many[2];
+  const found: Found = { how: "all", payments: many };
+  const brief = briefFor("how much did I spend?", found, [], []);
+  const ref = (p: StoryPayment) => brief.refs.get(p.id)!;
+
+  it("still gives the LLM about 60 payments, with the biggest ones even when they're old", () => {
+    expect(brief.data.found.payments.length).toBeLessThanOrEqual(63);
+    expect(brief.refs.has(big.id)).toBe(true);
+    expect(brief.data.found.figures.payments).toBe(70);
+  });
+
+  it("lists every payment behind a total, whatever the LLM cited", () => {
+    const r = readAnswer(JSON.stringify({ answer: `You spent ${spentTotal}.`, payments: [ref(many[69])] }), brief, found, many)!;
+    expect(r.sources).toHaveLength(70);
+  });
+
+  it("lists every payment behind a category total", () => {
+    const mixed = [...many, pay("2026-10-30", "Bus fare", 2.5, "transportation.daily_transportation")];
+    const f: Found = { how: "all", payments: mixed };
+    const b = briefFor("q", f, [], []);
+    const r = readAnswer(JSON.stringify({ answer: `Snacks came to ${spentTotal}.`, payments: [b.refs.get(many[69].id)] }), b, f, mixed)!;
+    expect(r.sources).toHaveLength(70);
+  });
+
+  it("says so in the answer when there are more than 60", () => {
+    const r = readAnswer(JSON.stringify({ answer: "Mostly coffee.", payments: [ref(many[69])] }), brief, found, many)!;
+    expect(r.text).toBe("Mostly coffee. Totals cover all 70 payments. I read the newest 60 in detail.");
+  });
+
+  it("says so too when it can't see a payment, since it may be an older one", () => {
+    const r = readAnswer(JSON.stringify({ answer: "I can't see a payment about that.", payments: [], none: true }), brief, found, many)!;
+    expect(r.text).toContain("I read the newest 60 in detail.");
+  });
+
+  it("adds nothing at 60 or fewer", () => {
+    const f: Found = { how: "all", payments: many.slice(-60) };
+    const b = briefFor("q", f, [], []);
+    const r = readAnswer(JSON.stringify({ answer: "Mostly coffee.", payments: ["p1"] }), b, f, many)!;
+    expect(r.text).toBe("Mostly coffee.");
+  });
 });
 
 describe("chat on Staging", () => {

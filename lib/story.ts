@@ -148,16 +148,23 @@ export function readChapters(answer: string, brief: ReturnType<typeof briefFor>,
   return out;
 }
 
-/** Writes chapters for the given weeks, 6 weeks per LLM call. A failed call leaves those weeks for next time. */
+/** Writes chapters for the given weeks, 6 weeks per LLM call. A call that gives none is tried once more, then those weeks wait for next time. */
 export async function writeChapters(weeks: string[], all: StoryPayment[], ask: AskJson, told: Told[] = [], stopped: string[] = []) {
   const out: WrittenChapter[] = [];
   for (let i = 0; i < weeks.length; i += 6) {
     const brief = briefFor(weeks.slice(i, i + 6), all, told, stopped);
-    try {
-      out.push(...readChapters(await ask("story", SYSTEM, `Weeks to write (data only):\n${JSON.stringify(brief.data)}`), brief, all));
-    } catch (e) {
-      console.error("story failed", e);
-    }
+    const write = async () => {
+      try {
+        const written = readChapters(await ask("story", SYSTEM, `Weeks to write (data only):\n${JSON.stringify(brief.data)}`), brief, all);
+        if (!written.length) console.error("story failed: no sentence passed the checks"); // one string, so the dev log file keeps it
+        return written;
+      } catch (e) {
+        console.error(`story failed: ${e instanceof Error ? e.message : e}`);
+        return [];
+      }
+    };
+    const first = await write();
+    out.push(...(first.length ? first : await write()));
   }
   return out;
 }
@@ -217,8 +224,9 @@ export const must = async <T>(q: PromiseLike<{ data: T; error: { code?: string }
 export async function loadPayments(db: SupabaseClient, accountId: string, personId?: string): Promise<StoryPayment[]> {
   let q = db.from("payment").select("id, paypal_txn_id, occurred_at, amount, currency, name, payee, event_code, category, for_who").eq("account_id", accountId);
   if (personId) q = q.or(`person_id.is.null,person_id.eq.${personId}`);
-  const rows = await must(q.order("occurred_at").limit(2000));
-  return rows.map((r) => ({ ...r, amount: Number(r.amount) }));
+  // Newest first, so a very long history loses its oldest payments, not its latest. Handed back oldest first.
+  const rows = await must(q.order("occurred_at", { ascending: false }).limit(2000));
+  return rows.reverse().map((r) => ({ ...r, amount: Number(r.amount) }));
 }
 
 /** This person's active told beliefs, oldest change first, so applying them in order lets the newest win. */

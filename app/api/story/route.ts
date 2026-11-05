@@ -28,7 +28,7 @@ export async function GET() {
   const names = (ids: string[]) => story.payments.filter((p) => ids.includes(p.id) && !p.item.startsWith("Sent to ")).map((p) => p.item);
   const chapters = suggestSends(story.chapters, support.data.map((b) => ({ id: b.id, who: b.who!, paymentIds: b.payment_ids })), names, sent);
   const leftOut = rows.data.map((r) => ({ txn: r.paypal_txn_id, code: r.event_code, label: LEFT_OUT_LABELS[r.event_code] ?? r.event_code, amount: Number(r.amount), date: day(r.occurred_at), why: r.reason }));
-  return Response.json({ ...story, chapters, leftOut, actions: acts.map(actionView), syncedThrough: account.data?.synced_through ?? null });
+  return Response.json({ ...story, chapters, leftOut, actions: acts.map(actionView), syncedThrough: account.data?.synced_through ?? null, source: v.source });
 }
 
 // Here's What Changed was seen: it stops showing.

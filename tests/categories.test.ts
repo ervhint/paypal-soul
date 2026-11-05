@@ -1,6 +1,6 @@
 // Unit: automatic categories with a mocked LLM and an in-memory store (U3: T-3.1, T-3.2, T-3.3, T-3.4).
 import { describe, expect, it } from "vitest";
-import { CATEGORIES, categorise, categoriseAccount, categoryLabel, isVague, paymentName, UNKNOWN_PAYMENT, type CategoryStore, type Uncategorised } from "@/lib/categories";
+import { CATEGORIES, categorise, categoriseAccount, categoryLabel, categoryView, isVague, paymentName, UNKNOWN_PAYMENT, type CategoryStore, type Uncategorised } from "@/lib/categories";
 import { askJson, type AskJson } from "@/lib/llm";
 
 const pay = (id: string, name: string | null, event_code = "T0002"): Uncategorised => ({ id, name, payee: "Test Store", event_code });
@@ -130,5 +130,17 @@ describe("already categorised (T-3.4)", () => {
     await categoriseAccount("acc", store, llm.ask);
     expect(llm.calls[0].user).not.toContain("Morning coffee");
     expect(llm.calls[0].user).toContain("Weekly groceries");
+  });
+});
+
+describe("category icons", () => {
+  it("gives every category its own icon", () => {
+    const icons = CATEGORIES.map((c) => categoryView(c).icon);
+    expect(icons).toHaveLength(54);
+    expect(new Set(icons).size).toBe(icons.length);
+  });
+
+  it("shows a question mark for a payment with no category", () => {
+    expect(categoryView(null).icon).toBe("circle-question");
   });
 });

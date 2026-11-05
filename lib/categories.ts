@@ -80,18 +80,68 @@ export function categoryLabel(id: string | null) {
   return c[1] && c[1] !== c[2] ? `${c[1]} → ${c[2]}` : c[2];
 }
 
-// Font Awesome icons by group, with a few categories that need their own.
-const ICONS: Record<string, string> = {
-  Bills: "file-invoice", Education: "graduation-cap", "Family Needs": "people-roof", "Food & Drinks": "mug-hot",
-  "Gift & Charity": "gift", Groceries: "basket-shopping", "Health & Personal Care": "heart-pulse", "Hobby & Entertainment": "star",
-  Loans: "landmark", Others: "paper-plane", "Savings & Investment": "piggy-bank", Shopping: "bag-shopping", Sports: "dumbbell",
-  Transportation: "bus", Traveling: "plane", "bills.mobile_data": "signal", "food_drinks.daily_meal": "utensils", mixed: "layer-group",
+// A Font Awesome solid icon for every category, each one different. A new category won't compile without one.
+const ICONS: Record<Category, string> = {
+  "bills.electricity_water_gas": "bolt",
+  "bills.house_apartment_rent": "house",
+  "bills.household_bills": "file-invoice",
+  "bills.insurance": "shield-halved",
+  "bills.mobile_data": "signal",
+  "bills.phone_bill": "phone",
+  "bills.state_revenue": "building-columns",
+  "bills.tv_internet": "tv",
+  "education.classes_workshops": "chalkboard-user",
+  "education.school_supplies": "pencil",
+  "education.tuition_fee": "graduation-cap",
+  "family_needs.children": "baby",
+  "family_needs.parents": "people-roof",
+  "food_drinks.daily_meal": "utensils",
+  "food_drinks.snacks_drinks": "mug-hot",
+  "gift_charity.charity": "hand-holding-heart",
+  "gift_charity.gift": "gift",
+  groceries: "basket-shopping",
+  "health_personal_care.doctor_hospital": "stethoscope",
+  "health_personal_care.drugs_medicine": "pills",
+  "health_personal_care.personal_care": "spa",
+  "hobby_entertainment.books": "book",
+  "hobby_entertainment.dining_out": "champagne-glasses",
+  "hobby_entertainment.games": "gamepad",
+  "hobby_entertainment.hobby": "palette",
+  "hobby_entertainment.movies_music": "film",
+  "hobby_entertainment.pet": "paw",
+  "loans.car_installment": "car",
+  "loans.credit_card": "credit-card",
+  "loans.flexi_cash": "hand-holding-dollar",
+  "loans.home_mortgage": "landmark",
+  mixed: "layer-group",
+  "others.cash_withdrawal": "money-bills",
+  "others.cost_taxes": "receipt",
+  "others.send_business": "briefcase",
+  "others.send_personal": "paper-plane",
+  "others.top_up_cards": "money-check",
+  "others.top_up_wallet": "wallet",
+  "others.transfer_other_account": "right-left",
+  "savings_investment.investment": "chart-line",
+  "savings_investment.savings": "piggy-bank",
+  "shopping.fashion": "shirt",
+  "shopping.gadget_electronic": "laptop",
+  "shopping.home_appliances": "blender",
+  "sports.sport_activities": "person-running",
+  "sports.sport_equipment": "dumbbell",
+  "transportation.daily_transportation": "bus",
+  "transportation.gasoline": "gas-pump",
+  "transportation.parking_toll_fee": "square-parking",
+  "transportation.vehicle_maintenance": "wrench",
+  "traveling.attractions_tours": "map-location-dot",
+  "traveling.hotel_villa": "hotel",
+  "traveling.transportation": "plane",
+  unknown: "circle-question",
 };
 
 /** The short name and icon a payment row shows, e.g. "Snacks & Drinks" with a mug. */
 export function categoryView(id: string | null) {
   const c = LIST.find((c) => c[0] === id) ?? LIST.at(-1)!;
-  return { name: c[2], icon: ICONS[c[0]] ?? (c[1] ? ICONS[c[1]] : undefined) ?? "circle-question" };
+  return { name: c[2], icon: ICONS[c[0]] };
 }
 
 /** How Soul names a payment in a sentence. */

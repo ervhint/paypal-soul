@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { post, useApi } from "@/lib/use-api";
-import { PaymentRow, Sheet, money } from "@/components/ui";
+import { PaymentList, Sheet, money } from "@/components/ui";
 import type { Payment } from "@/lib/types";
 import { titleCase } from "@/lib/title-case";
 
@@ -15,7 +15,7 @@ export default function ChatPage() {
   const msgs = data?.messages ?? [];
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState<Msg | null>(null);
+  const [open, setOpen] = useState<{ text: string; pays: Payment[]; of: number } | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(null), []);
 
@@ -55,12 +55,12 @@ export default function ChatPage() {
                   <p className="sources-title">Based on {m.sources.length === 1 ? "This Payment" : `These ${m.sources.length} Payments`}</p>
                   <div className="chips">
                     {m.sources.slice(0, CHIPS).map((p) => (
-                      <button key={p.id} className="pay-chip" onClick={() => setOpen(m)}>
+                      <button key={p.id} className="pay-chip" onClick={() => setOpen({ text: m.text, pays: [p], of: m.sources.length })}>
                         <i className={`fa-solid fa-${p.icon}`} aria-hidden="true" />
                         {titleCase(p.item)} · {p.date} · {money(p.amount)}
                       </button>
                     ))}
-                    {m.sources.length > CHIPS && <button className="pay-chip" onClick={() => setOpen(m)}>+{m.sources.length - CHIPS} More</button>}
+                    {m.sources.length > CHIPS && <button className="pay-chip" onClick={() => setOpen({ text: m.text, pays: m.sources, of: m.sources.length })}>+{m.sources.length - CHIPS} More</button>}
                   </div>
                 </>
               )}
@@ -94,8 +94,8 @@ export default function ChatPage() {
           <>
             <p className="eyebrow">Why I Said This</p>
             <h2>{open.text}</h2>
-            <p className="why">{open.sources.length === 1 ? "One payment says so." : `${open.sources.length} payments say so.`}</p>
-            <ul className="pays">{open.sources.map((p) => <PaymentRow key={p.id} p={p} />)}</ul>
+            <p className="why">{open.of === 1 ? "One payment says so." : open.pays.length === 1 ? `1 of ${open.of} payments behind this answer.` : `${open.of} payments say so.`}</p>
+            <PaymentList pays={open.pays} />
           </>
         )}
       </Sheet>

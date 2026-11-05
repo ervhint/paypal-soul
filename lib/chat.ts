@@ -14,6 +14,7 @@ export const MAX_QUESTION = 300;
 export const DAILY_QUESTIONS = 30;
 export const HISTORY = 10; // questions and answers the LLM sees
 const MAX_PAYMENTS = 60; // newest payments sent with a question; figures still cover all it found
+const BIGGEST = 3; // the biggest payments go too, so "what was my biggest payment?" stays right past the newest 60
 
 export type Turn = { role: "user" | "soul"; text: string; paymentIds: string[] };
 export type Belief = { kind: string; text: string; sureness: Sureness; checked: boolean }; // checked: told, corrected or Looks Right
@@ -132,7 +133,9 @@ export function cancelReply(question: string, pays: StoryPayment[]) {
 
 /** The question's data for the LLM: earlier turns, active beliefs, and the figures and payments code found, by ref. */
 export function briefFor(question: string, found: Found, beliefs: Belief[], history: Turn[], stopped: string[] = []) {
-  const shown = found.payments.slice(-MAX_PAYMENTS);
+  const newest = found.payments.slice(-MAX_PAYMENTS);
+  const biggest = [...found.payments].sort((a, b) => b.amount - a.amount).slice(0, BIGGEST);
+  const shown = [...biggest.filter((p) => !newest.includes(p)), ...newest];
   const refs = new Map(shown.map((p, i) => [p.id, `p${i + 1}`]));
   const t = totals(found.payments);
   const earlier: { question: string; answer: string }[] = [];
@@ -182,6 +185,18 @@ Rules:
 - Write dates as they appear in the data, like "Nov 2". Never write a year or a date in numbers.
 - Plain, warm and specific. No advice, no judgement, no greetings, no questions back.`;
 
+/** The payments behind every figure the answer states, so the list under it always matches its numbers. */
+function behindFigures(text: string, found: Found) {
+  const stated = new Set(amountsIn(text));
+  const says = (n: number) => stated.has(amountsIn(money(n))[0]);
+  const spending = found.payments.filter((p) => p.amount > 0);
+  const t = totals(found.payments);
+  if (says(t.spent)) return spending;
+  const named = t.byCategory.filter((c) => says(c.spent)).map((c) => c.category);
+  const who = t.forOthers.filter((o) => says(o.spent)).map((o) => o.who);
+  return spending.filter((p) => named.includes(categoryLabel(p.category)) || (p.for_who && who.includes(p.for_who)) || (says(t.onYou) && !p.for_who));
+}
+
 /** Turns the LLM's answer into Soul's reply, or null when it cites nothing it was given or writes an amount code didn't give. */
 export function readAnswer(answer: string, brief: ReturnType<typeof briefFor>, found: Found, all: StoryPayment[]) {
   const j = JSON.parse(answer) as { answer?: unknown; payments?: unknown; none?: unknown };
@@ -194,8 +209,11 @@ export function readAnswer(answer: string, brief: ReturnType<typeof briefFor>, f
   }
   const ids = new Map([...brief.refs].map(([id, r]) => [r, id]));
   const cited = [...new Set((Array.isArray(j.payments) ? j.payments : []).map((r) => ids.get(String(r))).filter((id): id is string => !!id))];
-  if (j.none === true || !cited.length) return { text: amountsIn(text).length ? noEvidence(all) : text, sources: [], none: true };
-  return { text, sources: found.payments.filter((p) => cited.includes(p.id)), none: false };
+  // Past the newest 60 the LLM didn't see every row, so the answer says so.
+  const note = found.payments.length > MAX_PAYMENTS ? ` Totals cover all ${found.payments.length} payments. I read the newest ${MAX_PAYMENTS} in detail.` : "";
+  if (j.none === true || !cited.length) return { text: (amountsIn(text).length ? noEvidence(all) : text) + note, sources: [], none: true };
+  const behind = new Set([...cited, ...behindFigures(text, found).map((p) => p.id)]);
+  return { text: text + note, sources: found.payments.filter((p) => behind.has(p.id)), none: false };
 }
 
 /** Answers one question, or refuses it before any LLM call. Saves the question and answer together. */

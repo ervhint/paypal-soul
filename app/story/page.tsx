@@ -16,6 +16,7 @@ type Story = {
   memory: Memory[];
   change: Change | null;
   summary: { payments: number; spent: number; habits: number; checks: number };
+  source?: "prepared" | "own" | null;
   syncedThrough: string | null;
 };
 type Step = "evidence" | "correct" | "ask";
@@ -41,8 +42,8 @@ function StoryView() {
   const runSync = useCallback(async () => {
     setSync("syncing");
     const r = await fetch("/api/sync", { method: "POST" }).then((r) => r.json()).catch(() => null);
-    setSync(r?.ok ? "idle" : "offline");
     await reload(); // the story may have been rewritten from saved payments even when PayPal failed
+    setSync(r?.ok ? "idle" : "offline"); // after the reload, or a first visit shows "couldn't write" until the chapters arrive
     return r?.ok ? (r.added as number) : null;
   }, [reload]);
   // Once per open: development runs effects twice, and each sync may cost an LLM call.
@@ -160,7 +161,7 @@ function StoryView() {
     <div className="wrap story">
       <div className="read">
         {state === "syncing" && (
-          <p className="eyebrow syncing" role="status">Reading New Payments From PayPal…</p>
+          <p className="eyebrow syncing" role="status">{data.source === "prepared" ? "Reading New Payments From the Prepared PayPal Account…" : "Reading New Payments From PayPal…"}</p>
         )}
         {state === "offline" && (
           <div className="panel offline" role="status">
@@ -272,8 +273,8 @@ function StoryView() {
             <ul className="pays">{pays(claim).map((p) => <PaymentRow key={p.id} p={p} />)}</ul>
             <p className="note"><button className="link" style={{ fontSize: 13.5 }} onClick={() => { close(); setMissing(true); }}>Why Are Some Rows Missing?</button></p>
             <div className="actions">
-              <button className="btn" onClick={() => setStep("correct")}>That&rsquo;s Not Right</button>
-              <button className="btn dark" disabled={busy} onClick={confirm}>Looks Right</button>
+              <button className="btn" disabled={busy} onClick={confirm}>Looks Right</button>
+              <button className="btn dark" onClick={() => setStep("correct")}>That&rsquo;s Not Right</button>
             </div>
           </>
         )}
@@ -306,7 +307,7 @@ function StoryView() {
         )}
       </Sheet>
       <Sheet open={missing} onClose={closeMissing} title="Rows left out of your story">
-        <p className="eyebrow">Compared With PayPal</p>
+        <p className="eyebrow">From Your PayPal Report</p>
         <h2>Why Are Some Rows Missing?</h2>
         <p className="why">PayPal&rsquo;s report also lists rows that aren&rsquo;t purchases. I leave them out of the story and the totals, and they&rsquo;re all here. A new payment can also take up to 3 hours to reach the report.</p>
         <ul className="pays">
@@ -321,7 +322,7 @@ function StoryView() {
             </li>
           ))}
         </ul>
-        <p className="note"><Link className="link" style={{ fontSize: 13.5 }} href="/about#differences">All the Differences From PayPal</Link></p>
+        <p className="note"><Link className="link" style={{ fontSize: 13.5 }} href="/about#differences">How Soul Uses Your PayPal Data</Link></p>
       </Sheet>
       <Toast text={toast.text} />
     </div>
