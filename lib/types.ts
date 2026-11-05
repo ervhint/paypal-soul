@@ -19,4 +19,4 @@ export type Memory = {
   paymentIds: string[];
   active: boolean;
 };
-export type Change = { claimId: string; before: string; after: string; notes: string[] };
+export type Change = { id: string; claimId: string; before: string; after: string; notes: string[]; canUndo: boolean };

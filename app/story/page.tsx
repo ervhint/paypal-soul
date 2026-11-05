@@ -132,6 +132,18 @@ function StoryView() {
     if (r.sure) await reload();
     toast.show(r.sure ? "Thanks, I'm Sure Now" : "Thanks for Checking");
   };
+  // Undo: the belief and chapter go back as they were, at once, since nothing is rewritten.
+  const undo = async () => {
+    if (!data.change) return;
+    setBusy(true);
+    const r = await fetch("/api/correct", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: data.change.id }) })
+      .then((r) => r.json())
+      .catch(() => null);
+    await reload();
+    setBusy(false);
+    if (r?.status === "done") window.scrollTo({ top: 0, behavior: "smooth" }); // the panel and its text are gone, so the page has moved
+    toast.show(r?.status === "done" ? "Undone, Your Story Is Back" : (r?.message ?? "I Couldn't Undo That Just Now"));
+  };
   const pays = (c: Claim) => data.payments.filter((p) => c.paymentIds.includes(p.id));
   const { change } = data;
   const changedIn = change && data.chapters.find((ch) => ch.claims.some((c) => c.id === change.claimId));
@@ -192,7 +204,10 @@ function StoryView() {
                 <details className="changes" aria-label="What changed">
                   <summary>
                     <span className="tag">Rewritten</span> You Corrected Me
-                    <button className="link" onClick={(e) => { e.preventDefault(); setSeen(true); fetch("/api/story", { method: "DELETE" }); }}>Looks Right</button>
+                    <span className="changes-actions">
+                      {change.canUndo && <button className="link" disabled={busy} onClick={(e) => { e.preventDefault(); undo(); }}>Undo</button>}
+                      <button className="link" disabled={busy} onClick={(e) => { e.preventDefault(); setSeen(true); fetch("/api/story", { method: "DELETE" }); }}>Looks Right</button>
+                    </span>
                   </summary>
                   <p className="before"><span className="sr">Before: </span>{change.before}</p>
                   <p className="after"><span className="sr">Now: </span>{change.after}</p>

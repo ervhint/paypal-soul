@@ -1,4 +1,4 @@
-import { confirm, correct } from "@/lib/correct";
+import { confirm, correct, undoCorrection } from "@/lib/correct";
 import { askJson } from "@/lib/llm";
 import { requestDb } from "@/lib/session";
 import { currentVisitor } from "@/lib/supabase";
@@ -22,5 +22,15 @@ export async function PATCH(req: Request) {
   const v = await currentVisitor(db);
   if (!v?.accountId) return Response.json(NO_DATA, { status: 409 });
   const r = await confirm(db, v.accountId, String(claimId ?? ""));
+  return Response.json(r, { status: r.status === "error" ? 422 : 200 });
+}
+
+// Undo on Here's What Changed: the belief and chapter go back, and the correction stays as undone.
+export async function DELETE(req: Request) {
+  const { id } = await req.json().catch(() => ({}));
+  const db = await requestDb();
+  const v = await currentVisitor(db);
+  if (!v?.accountId) return Response.json(NO_DATA, { status: 409 });
+  const r = await undoCorrection(db, v.id, v.accountId, String(id ?? ""));
   return Response.json(r, { status: r.status === "error" ? 422 : 200 });
 }

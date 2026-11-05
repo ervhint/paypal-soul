@@ -287,12 +287,12 @@ export async function readStory(db: SupabaseClient, accountId: string) {
     loadTold(db, accountId),
     must(db.from("chapter").select("id, title, starts_on, ends_on, is_new, suggestion, claim(id, position, text, payment_ids, belief_id, rewritten)").eq("account_id", accountId).order("ends_on", { ascending: false }).order("is_new", { ascending: false }).order("created_at", { ascending: false })),
     must(db.from("belief").select(BELIEF_COLUMNS).eq("account_id", accountId).eq("active", true).order("created_at")),
-    must(db.from("correction").select("claim_id, claim_before, claim_after, notes").eq("account_id", accountId).is("seen_at", null).is("undone_at", null).not("claim_id", "is", null).order("created_at", { ascending: false }).limit(1)),
+    must(db.from("correction").select("id, claim_id, claim_before, claim_after, notes, undo").eq("account_id", accountId).is("seen_at", null).is("undone_at", null).not("claim_id", "is", null).order("created_at", { ascending: false }).limit(1)),
   ]);
   const all = applyTold(raw, told);
   const payments = all.map(paymentView).reverse();
   const [latest] = corrections;
-  const change: Change | null = latest ? { claimId: latest.claim_id, before: latest.claim_before ?? "", after: latest.claim_after ?? "", notes: latest.notes } : null;
+  const change: Change | null = latest ? { id: latest.id, claimId: latest.claim_id, before: latest.claim_before ?? "", after: latest.claim_after ?? "", notes: latest.notes, canUndo: !!latest.undo } : null;
   // A purchase's chapter (U8) is new until a later chapter goes above it.
   const story: Chapter[] = chapters.map((c, i) => ({
     id: c.id,

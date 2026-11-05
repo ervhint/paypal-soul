@@ -3,7 +3,7 @@
 // prepared payments corrects the groceries, the story is rebuilt and the correction still holds.
 import type { CookieMethodsServer } from "@supabase/ssr";
 import { afterAll, describe, expect, it } from "vitest";
-import { changeNotes, confirm, correct, interpret, nextTold, readReading } from "@/lib/correct";
+import { changeNotes, confirm, correct, interpret, movedIds, nextTold, readReading, undoCorrection } from "@/lib/correct";
 import type { AskJson } from "@/lib/llm";
 import { applyTold, briefFor, buildStory, readStory, type Told } from "@/lib/story";
 import { choosePrepared, preparedAccountId, secretClient, sessionClient } from "@/lib/supabase";
@@ -232,5 +232,72 @@ describe("correcting the story on Staging", () => {
     expect((await p.db().from("belief").select("sureness").eq("id", unsure!.id).single()).data).toEqual({ sureness: "sure" });
     expect(await groceryClaim(p.db)).toMatchObject({ id: claim.id, text: claim.text, rewritten: false });
     expect((await p.db().from("correction").select("id")).data).toEqual([]);
+  });
+});
+
+describe("undoing a correction", () => {
+  it("knows which told beliefs a change took payments from", () => {
+    const sam = told({ id: "sam", who: "Sam", paymentIds: ["a", "b"] });
+    const jo = told({ id: "jo", who: "Jo", paymentIds: ["c"] });
+    const kept = told({ id: "kept", who: "Kim", paymentIds: ["d"] });
+    const next = nextTold([sam, jo, kept], told({ id: "new", who: "your mum", paymentIds: ["b", "c"] }));
+    expect(movedIds([sam, jo, kept], next)).toEqual(["sam", "jo"]);
+  });
+});
+
+describe("undoing on Staging", () => {
+  type Person = Awaited<ReturnType<typeof enter>>;
+  const snapshot = async (p: Person) => {
+    const s = await readStory(p.db(), p.accountId);
+    const { data: beliefs } = await p.db().from("belief").select("id, kind, text, who, payment_ids, active, source").order("id");
+    return { chapters: s.chapters.map((c) => ({ title: c.title, when: c.when, claims: c.claims.map((k) => ({ text: k.text, paymentIds: k.paymentIds, belief: k.belief, rewritten: k.rewritten })) })), spent: s.summary.spent, beliefs };
+  };
+  const latest = async (p: Person) => (await readStory(p.db(), p.accountId)).change!;
+  const saidForMum = async (p: Person) => {
+    const claim = await groceryClaim(p.db);
+    expect((await correct(p.db(), p.id, p.accountId, { claimId: claim.id, said: "those groceries are for my mum" }, llm().ask)).status).toBe("done");
+  };
+
+  it("puts the belief and chapter back word for word and keeps the correction as undone (T-12.1)", async () => {
+    const p = await enter();
+    await buildStory(p.db(), p.id, p.accountId, llm().ask);
+    const before = await snapshot(p);
+    await saidForMum(p);
+    const change = await latest(p);
+    expect(change.canUndo).toBe(true);
+    expect((await snapshot(p)).spent).not.toBe(before.spent);
+
+    expect(await undoCorrection(p.db(), p.id, p.accountId, change.id)).toEqual({ status: "done" });
+
+    expect(await snapshot(p)).toEqual(before);
+    expect((await readStory(p.db(), p.accountId)).change).toBeNull();
+    const { data: kept } = await p.db().from("correction").select("said, undone_at, belief_after").eq("id", change.id).single();
+    expect(kept).toMatchObject({ said: "those groceries are for my mum", belief_after: "You buy the weekly groceries for your mum." });
+    expect(kept!.undone_at).not.toBeNull();
+
+    // Nothing is stale, so the next sync writes nothing, and a second tap does nothing.
+    expect(await buildStory(p.db(), p.id, p.accountId, llm(true).ask)).toEqual({ written: 0, stale: 0 });
+    expect((await undoCorrection(p.db(), p.id, p.accountId, change.id)).status).toBe("error");
+  });
+
+  it("can correct again after an undo", async () => {
+    const p = await enter();
+    await buildStory(p.db(), p.id, p.accountId, llm().ask);
+    await saidForMum(p);
+    await undoCorrection(p.db(), p.id, p.accountId, (await latest(p)).id);
+    await saidForMum(p);
+    expect((await groceryClaim(p.db)).text).toBe("The weekly groceries went to your mum.");
+  });
+
+  it("closes once the person has seen it, and can't touch another person's correction", async () => {
+    const p = await enter();
+    const other = await enter();
+    await buildStory(p.db(), p.id, p.accountId, llm().ask);
+    await saidForMum(p);
+    const { id } = await latest(p);
+    expect((await undoCorrection(other.db(), other.id, other.accountId, id)).status).toBe("error");
+    await p.db().from("correction").update({ seen_at: new Date().toISOString() }).eq("id", id);
+    expect((await undoCorrection(p.db(), p.id, p.accountId, id)).status).toBe("error");
+    expect((await groceryClaim(p.db)).text).toBe("The weekly groceries went to your mum.");
   });
 });

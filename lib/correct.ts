@@ -19,6 +19,8 @@ export type Result = { status: "done"; sure?: boolean } | { status: "ask"; quest
 
 const FAILED = "I couldn't rewrite the chapter just now, so nothing changed. Try again in a moment.";
 const LOST = "I can't find that sentence any more. Refresh the story and try again.";
+const NO_UNDO = "That change can't be undone any more. Refresh the story to see where it stands.";
+const UNDO_FAILED = "I couldn't undo that just now, so it still stands. Try again in a moment.";
 const error = (message: string): Result => ({ status: "error", message });
 const money = (n: number) => `$${n.toFixed(2)}`;
 const short = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -115,6 +117,24 @@ export async function saveMoved(db: SupabaseClient, told: Told[], next: Told[], 
   }
 }
 
+const BELIEF_BEFORE = "id, kind, key, text, who, category, sureness, source, payment_ids, active, told_at, updated_at";
+type ClaimBefore = { position: number; text: string; payment_ids: string[]; belief_id: string | null; rewritten: boolean };
+type ChapterBefore = { week: string; title: string; starts_on: string; ends_on: string; payment_ids: string[]; claim: ClaimBefore[] };
+/** What Undo puts back (U12): the beliefs and chapters as they were, and the belief this correction made, if any. */
+export type UndoPoint = { created: string | null; weeks: string[]; beliefs: ({ id: string } & Record<string, unknown>)[]; chapters: ChapterBefore[] };
+
+/** The told beliefs a change takes payments from, which Undo has to give back. */
+export const movedIds = (told: Told[], next: Told[]) => told.filter((t) => next.find((n) => n.id === t.id)?.paymentIds.length !== t.paymentIds.length).map((t) => t.id);
+
+/** Copies the beliefs and weeks a correction is about to change. Call it before anything is saved. */
+export async function undoPoint(db: SupabaseClient, accountId: string, weeks: string[], beliefIds: string[]): Promise<UndoPoint> {
+  const [beliefs, chapters] = await Promise.all([
+    must(db.from("belief").select(BELIEF_BEFORE).eq("account_id", accountId).in("id", beliefIds)),
+    must(db.from("chapter").select("week, title, starts_on, ends_on, payment_ids, claim(position, text, payment_ids, belief_id, rewritten)").eq("account_id", accountId).in("week", weeks)),
+  ]);
+  return { created: null, weeks, beliefs: beliefs as unknown as UndoPoint["beliefs"], chapters: chapters as ChapterBefore[] };
+}
+
 /** Saves the rewritten chapters, with the changed sentences marked, and the correction with Here's What Changed. */
 export async function saveCorrection(
   db: SupabaseClient,
@@ -131,6 +151,7 @@ export async function saveCorrection(
     targets: string[];
     before: StoryPayment[];
     after: StoryPayment[];
+    undo: UndoPoint;
   },
 ) {
   const old = new Set(o.oldClaims);
@@ -142,7 +163,7 @@ export async function saveCorrection(
   const notes = changeNotes({ belief: o.belief.text, who: o.belief.who, targets: o.targets, before: o.before, after: o.after, titleBefore: o.titleBefore, titleAfter: o.main.title });
   await must(db.from("correction").update({ seen_at: new Date().toISOString() }).eq("account_id", accountId).is("seen_at", null)); // one Here's What Changed at a time
   await must(
-    db.from("correction").insert({ person_id: personId, account_id: accountId, belief_id: o.belief.id, claim_id: claimId, said: o.said, belief_before: o.belief.before, belief_after: o.belief.text, claim_before: o.claimBefore, claim_after: changed[0].text, notes }),
+    db.from("correction").insert({ person_id: personId, account_id: accountId, belief_id: o.belief.id, claim_id: claimId, said: o.said, belief_before: o.belief.before, belief_after: o.belief.text, claim_before: o.claimBefore, claim_after: changed[0].text, notes, undo: o.undo }),
   );
 }
 
@@ -195,6 +216,7 @@ export async function correct(db: SupabaseClient, personId: string, accountId: s
   // Support for someone the person stopped using on Memory comes back on the same belief: a key is unique.
   const stoppedId = key && !same ? (await db.from("belief").select("id").eq("account_id", accountId).eq("key", key).maybeSingle()).data?.id : undefined;
   const existing = same?.id ?? stoppedId;
+  const undo = await undoPoint(db, accountId, written.map((w) => w.week), [...(existing ? [existing] : []), ...movedIds(told, next)]);
   const belief = existing
     ? await must(db.from("belief").update(row).eq("id", existing).select("id").single())
     : await must(db.from("belief").insert({ person_id: personId, account_id: accountId, ...row }).select("id").single());
@@ -211,7 +233,49 @@ export async function correct(db: SupabaseClient, personId: string, accountId: s
     targets: reading.paymentIds,
     before,
     after,
+    undo: { ...undo, created: existing ? null : belief.id },
   });
+  return { status: "done" };
+}
+
+/** Puts the beliefs and chapters back as they were. A week with no chapter before is left to the next sync. */
+async function restore(db: SupabaseClient, personId: string, accountId: string, u: UndoPoint) {
+  for (const { id, ...row } of u.beliefs) await must(db.from("belief").update(row).eq("id", id).eq("account_id", accountId));
+  await must(db.from("chapter").delete().eq("account_id", accountId).in("week", u.weeks));
+  for (const { claim, ...ch } of u.chapters) {
+    const { data, error } = await db.from("chapter").insert({ person_id: personId, account_id: accountId, ...ch }).select("id").single();
+    if (error?.code === "23505") continue; // another tab wrote this week first
+    if (error) throw error;
+    await must(db.from("claim").insert(claim.map((c) => ({ ...c, chapter_id: data.id, person_id: personId }))));
+  }
+  if (u.created) await must(db.from("belief").delete().eq("id", u.created).eq("account_id", accountId));
+}
+
+/**
+ * Undo on Here's What Changed (AC-12.1): the belief and chapters go back word for word, with no LLM call,
+ * and the correction stays as undone. Only while its panel shows: once it's seen, or the sentence was
+ * rewritten again, the story has moved on from the copy. Taking the correction first stops a second tap.
+ */
+export async function undoCorrection(db: SupabaseClient, personId: string, accountId: string, id: string): Promise<Result> {
+  const { data } = await db
+    .from("correction")
+    .update({ undone_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("account_id", accountId)
+    .is("undone_at", null)
+    .is("seen_at", null)
+    .not("claim_id", "is", null)
+    .not("undo", "is", null)
+    .select("undo")
+    .maybeSingle();
+  if (!data) return error(NO_UNDO);
+  try {
+    await restore(db, personId, accountId, data.undo as UndoPoint);
+  } catch (e) {
+    console.error("undo failed", e);
+    await db.from("correction").update({ undone_at: null }).eq("id", id);
+    return error(UNDO_FAILED);
+  }
   return { status: "done" };
 }
 

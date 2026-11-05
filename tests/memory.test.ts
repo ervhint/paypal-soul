@@ -4,7 +4,7 @@
 import type { CookieMethodsServer } from "@supabase/ssr";
 import { afterAll, describe, expect, it } from "vitest";
 import { answer, briefFor as chatBrief, chatStore, findPayments } from "@/lib/chat";
-import { correct, type Reading } from "@/lib/correct";
+import { correct, undoCorrection, type Reading } from "@/lib/correct";
 import type { AskJson } from "@/lib/llm";
 import { editBelief, keyAfter, readMemory, setUsing, whoAfter } from "@/lib/memory";
 import { briefFor, buildStory, readStory } from "@/lib/story";
@@ -226,6 +226,28 @@ describe("Memory on Staging", () => {
     expect(await correct(p.db(), p.id, p.accountId, { claimId: claim!.id, said: "those groceries are for my mum" }, llm().ask)).toEqual({ status: "done" });
     const { data: rows } = await p.db().from("belief").select("id, active").eq("kind", "support");
     expect(rows).toEqual([{ id: belief.id, active: true }]);
+  });
+
+  it("undoes an edit back to the belief it was, and an undone correction stays undone (T-12.1)", async () => {
+    const { p, belief: b } = await corrected();
+    const titles = (await readStory(p.db(), p.accountId)).chapters.map((c) => c.title);
+    expect((await editBelief(p.db(), p.id, p.accountId, { id: b.id, text: "I buy the groceries for my sister." }, llm().ask)).status).toBe("done");
+    const change = (await readStory(p.db(), p.accountId)).change!;
+    expect(await undoCorrection(p.db(), p.id, p.accountId, change.id)).toEqual({ status: "done" });
+    expect((await readMemory(p.db(), p.accountId)).memory.find((m) => m.id === b.id)).toEqual(b);
+    expect((await readStory(p.db(), p.accountId)).chapters.map((c) => c.title)).toEqual(titles);
+
+    await setUsing(p.db(), p.id, p.accountId, b.id, false, llm().ask);
+    await setUsing(p.db(), p.id, p.accountId, b.id, true, llm().ask);
+    const { data: row } = await p.db().from("correction").select("undone_at").eq("id", change.id).single();
+    expect(row!.undone_at).not.toBeNull();
+  });
+
+  it("closes Undo when a belief is stopped, since the story moved on", async () => {
+    const { p, belief: b } = await corrected();
+    const { id } = (await readStory(p.db(), p.accountId)).change!;
+    await setUsing(p.db(), p.id, p.accountId, b.id, false, llm().ask);
+    expect((await undoCorrection(p.db(), p.id, p.accountId, id)).status).toBe("error");
   });
 
   it("can't touch another person's belief", async () => {

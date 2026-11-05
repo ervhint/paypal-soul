@@ -4,7 +4,7 @@
 // (AC-6.3), and Use Again brings it back. All three rewrite every week with the belief's payments first, so
 // a failed rewrite changes nothing.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { interpret, MAX_SAID, nextTold, saveCorrection, saveMoved, WHO_QUESTION, type Reading, type Result } from "@/lib/correct";
+import { interpret, MAX_SAID, movedIds, nextTold, saveCorrection, saveMoved, undoPoint, WHO_QUESTION, type Reading, type Result } from "@/lib/correct";
 import type { AskJson } from "@/lib/llm";
 import { applyTold, BELIEF_COLUMNS, beliefView, clip, HABIT, loadPayments, loadStopped, loadTold, must, paymentView, saveChapters, short, writeChapters, type Told } from "@/lib/story";
 import { weekOf, type StoryPayment } from "@/lib/totals";
@@ -85,6 +85,7 @@ export async function editBelief(db: SupabaseClient, personId: string, accountId
   const claims = ((chapter?.claim ?? []) as { text: string; belief_id: string | null; payment_ids: string[]; position: number }[]).sort((x, y) => x.position - y.position);
   const claim = claims.find((c) => c.belief_id === b.id) ?? claims.find((c) => c.payment_ids.some((id) => b.payment_ids.includes(id)));
 
+  const undo = await undoPoint(db, accountId, done.written.map((w) => w.week), [b.id, ...movedIds(told, next)]);
   const now = new Date().toISOString();
   await must(db.from("belief").update({ kind: who ? "support" : "told", key, text: said, who, category, sureness: "sure", source: `You Told Me, ${short(now)}`, told_at: now, updated_at: now }).eq("id", b.id));
   await saveMoved(db, told, next, b.id);
@@ -99,6 +100,7 @@ export async function editBelief(db: SupabaseClient, personId: string, accountId
     targets: b.payment_ids,
     before,
     after,
+    undo,
   });
   return { status: "done" };
 }
@@ -119,7 +121,7 @@ export async function setUsing(db: SupabaseClient, personId: string, accountId: 
   const now = new Date().toISOString();
   await must(db.from("belief").update({ active, updated_at: now }).eq("id", b.id)); // the newest told belief wins
   await saveMoved(db, told, next, b.id);
-  await must(db.from("correction").update({ undone_at: active ? null : now }).eq("belief_id", b.id));
+  await must(db.from("correction").update({ seen_at: now }).eq("account_id", accountId).is("seen_at", null)); // the story moved on, so Undo closes
   await saveChapters(db, personId, accountId, done.written);
   return { status: "done" };
 }
