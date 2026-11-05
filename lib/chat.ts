@@ -1,7 +1,7 @@
 // Grounded chat (U7). Code finds the payments a question is about and works out their figures; the LLM
 // only answers from those, the person's active beliefs and the last 10 questions and answers (AC-7.3).
 // A question that names something no payment matches gets "no evidence" from code, with no LLM call
-// (AC-7.2). Every answer cites payments it was given, and every amount in it must be one of code's
+// (AC-7.2), and so does a request to cancel, which code answers. Every answer cites payments it was given, and every amount in it must be one of code's
 // figures, or it isn't saved (NF-7, NF-8). Questions are limited to 300 characters and 30 a day per
 // person, reset at 00:00 UTC (NF-9). The question and payment text go in as JSON data (NF-6).
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -105,6 +105,29 @@ export function noEvidence(pays: StoryPayment[]) {
   return `I can't find a payment about that, so I won't guess. I can see ${pays.length} payment${pays.length > 1 ? "s" : ""}: ${list}.`;
 }
 
+// ---- Asking to cancel ----
+
+const SUBSCRIPTION = "T0002";
+// "Cancel my coffee", "how do I cancel?", "stop paying for Bus fare". Asking about the past ("did I cancel?") is a normal question.
+const CANCEL = /\b(cancel|unsubscribe)\b|\b(stop|end|turn off)\b.*\b(subscriptions?|memberships?|automatic payments?|paying for|charging)\b/i;
+const ASKS_PAST = /\b(did|have|has|had)\b/i;
+export const asksToCancel = (question: string) => CANCEL.test(question) && !ASKS_PAST.test(question);
+
+/**
+ * Soul's answer to a request to cancel, written by code so it can never sound done (U14 was cut: consent
+ * doesn't reach subscriptions). It names the subscription when the question points at exactly one.
+ */
+export function cancelReply(question: string, pays: StoryPayment[]) {
+  const found = findPayments(question, pays);
+  const subs = found?.how === "named" ? found.payments.filter((p) => p.event_code === SUBSCRIPTION) : [];
+  const names = [...new Set(subs.map(paymentName))];
+  const one = names.length === 1 && subs.length === found?.payments.length;
+  const rest = "under automatic payments. I'll keep reading what you pay, so your story stays up to date.";
+  return one
+    ? { text: `${names[0]} is yours to change any time. You can cancel it in your PayPal settings, ${rest}`, sources: subs, none: false }
+    : { text: `Subscriptions are yours to change any time. You can cancel one in your PayPal settings, ${rest}`, sources: [], none: true };
+}
+
 // ---- What the LLM gets ----
 
 /** The question's data for the LLM: earlier turns, active beliefs, and the figures and payments code found, by ref. */
@@ -187,7 +210,8 @@ export async function answer(store: ChatStore, question: string, ask: AskJson, n
   const lastCited = history.findLast((t) => t.role === "soul")?.paymentIds ?? [];
   const found = findPayments(q, all, lastCited, stopped);
   let reply: { text: string; sources: StoryPayment[]; none: boolean } | null;
-  if (!found) reply = { text: noEvidence(all), sources: [], none: true };
+  if (asksToCancel(q)) reply = cancelReply(q, all);
+  else if (!found) reply = { text: noEvidence(all), sources: [], none: true };
   else {
     const brief = briefFor(q, found, beliefs, history, stopped);
     try {

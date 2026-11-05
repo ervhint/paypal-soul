@@ -4,7 +4,7 @@
 // with a support belief asks about the groceries and about flights, and the history reads back.
 import type { CookieMethodsServer } from "@supabase/ssr";
 import { afterAll, describe, expect, it } from "vitest";
-import { answer, briefFor, chatStore, DAILY_QUESTIONS, findPayments, noEvidence, readAnswer, type Belief, type ChatStore, type Turn } from "@/lib/chat";
+import { answer, asksToCancel, briefFor, cancelReply, chatStore, DAILY_QUESTIONS, findPayments, noEvidence, readAnswer, type Belief, type ChatStore, type Turn } from "@/lib/chat";
 import type { AskJson } from "@/lib/llm";
 import { applyTold } from "@/lib/story";
 import { choosePrepared, preparedAccountId, secretClient, sessionClient } from "@/lib/supabase";
@@ -152,6 +152,36 @@ describe("limits", () => {
     };
     expect((await answer(store, "groceries?", failing)).status).toBe("error");
     expect(turns).toHaveLength(2);
+  });
+});
+
+describe("asking to cancel", () => {
+  const rest = "under automatic payments. I'll keep reading what you pay, so your story stays up to date.";
+
+  it("spots a request, and leaves questions about the past alone", () => {
+    for (const q of ["Cancel my Morning coffee", "how do I cancel?", "Can you cancel Bus fare for me", "Please unsubscribe me", "stop my subscription", "Stop paying for Morning coffee", "stop charging me"]) expect(asksToCancel(q), q).toBe(true);
+    for (const q of ["Did I cancel anything?", "Have I cancelled anything?", "How much did I spend on coffee?", "Stop spending on coffee", "When does it end?"]) expect(asksToCancel(q), q).toBe(false);
+  });
+
+  it("names the one subscription asked about, and cites its payments", () => {
+    expect(cancelReply("Cancel my Morning coffee", all)).toEqual({ text: `Morning coffee is yours to change any time. You can cancel it in your PayPal settings, ${rest}`, sources: all.filter((p) => p.name === "Morning coffee"), none: false });
+  });
+
+  it("speaks generally for no match, several matches, or a payment that isn't a subscription", () => {
+    const general = `Subscriptions are yours to change any time. You can cancel one in your PayPal settings, ${rest}`;
+    const once = { ...pay("2026-11-04", "Weekend market groceries", 18, "groceries"), event_code: "T0006" };
+    expect(cancelReply("Cancel my gym", all).text).toBe(general);
+    expect(cancelReply("Cancel my coffee and bus", all).text).toBe(general);
+    expect(cancelReply("Cancel my weekend market", [...all, once])).toEqual({ text: general, sources: [], none: true });
+  });
+
+  it("answers from code, never the LLM, and saves the question", async () => {
+    const { store, turns } = memoryStore();
+    const never: AskJson = async () => {
+      throw new Error("no LLM call");
+    };
+    expect(await answer(store, "Cancel my Morning coffee", never)).toMatchObject({ status: "answered", none: false });
+    expect(turns.map((t) => t.role)).toEqual(["user", "soul"]);
   });
 });
 

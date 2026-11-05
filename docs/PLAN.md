@@ -56,7 +56,7 @@
 | Tier | What |
 | --- | --- |
 | Must | Two entry options · PayPal consent connection with Check connection · sandbox sync on open, refresh and one daily job · automatic categories from the user's list · story chapters · evidence on every claim with the PayPal transaction ID · "Why are some rows missing?" explanation, the rows left out, and an About section on differences from PayPal · Proactive Noticing · Revising Understanding · Richer Memory · limited Habit Recognition · grounded chat · one confirmed action (send money) · Delete my data |
-| Should | Interests & Preferences · second action (cancel a subscription) · webhook for live chapters on purchases inside Soul |
+| Should | Interests & Preferences · webhook for live chapters on purchases inside Soul |
 | Could | Pasted sandbox app keys, only if consent fails for another developer's accounts |
 | Won't | Reading real people's PayPal history · PayPal's identity-only login API · Web3 · ChatGPT or hosted MCP chat · AG Grid · APIMatic · real money |
 
@@ -82,7 +82,7 @@ A project can win one Grand or Honorable Mention prize, plus one Sponsor prize. 
 ### Sandbox facts
 - Payments keep their real dates, so bulk seeding can't create a habit. Prepared history comes from daily subscriptions. Only first charges are seen so far, and it should meet the minimum about Nov 9 if charges repeat.
 - All prepared payments go to one merchant, `Test Store`, so the story follows what was bought, not who was paid.
-- Send money and cancel subscription haven't been run. Consent lists payment, refund and fee permissions, not payouts, so sending from a judge's connected account is unproven.
+- Send money hasn't been run. Cancel subscription was cut (U14). Consent lists payment, refund and fee permissions, not payouts, so sending from a judge's connected account is unproven.
 - A real launch still needs PayPal's approval for production access. The README and pitch must say so.
 - Hosted sandbox MCP has an open bug (paypal/agent-toolkit#119), so we use REST or the Agent Toolkit on the server.
 
@@ -421,10 +421,11 @@ Covers: US-09      Screens: S-02, S-06      Depends on: U6      Est: 2h
 - AC-13.1 Given repeated categories, when the story is built, then Soul states an interest as a belief with payments, and the person can correct it like any other.
 Tests: T-13.1 (unit), T-13.2 (e2e)
 
-#### U14 — Cancel a subscription  (Should)
+#### U14 — Cancel a subscription  (Cut, Nov 5)
 Covers: US-22      Screens: S-08, S-09, S-09a      Depends on: U9      Est: 2h
 - AC-14.1 Given a daily subscription habit, when the person confirms Cancel, then Soul cancels it in the sandbox and the story notes the change. If PayPal refuses, the failed page says nothing changed. Open question 5 is checked before this unit starts.
-Tests: T-14.1 (e2e)
+Tests: T-14.1 (e2e), cut
+Cut on Nov 5: consent doesn't reach subscriptions (open question 5). Chat answers a request to cancel instead, pointing to PayPal's settings.
 
 #### U15 — Live chapters by webhook  (Should)
 Covers: US-11      Screens: S-02c      Depends on: U8      Est: 2h
@@ -432,7 +433,7 @@ Covers: US-11      Screens: S-02c      Depends on: U8      Est: 2h
 Tests: T-15.1 (integration)
 
 ### Build order and time
-U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U14, U15 if time allows.
+U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U15 if time allows (U14 cut).
 
 U6 moves after the golden path because the demo doesn't open Memory. U10 is Must but after the golden path, since the demo uses prepared data and U2 already proves the read route.
 
@@ -476,12 +477,13 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 3 | Actions are read-only for people. Shared tables are written only by the server | A person can't mark a payment completed or add fake payments, even with their own token |
 | Nov 5 | Log Out of My Sandbox deletes the person's own account row, and with it that sandbox's payments, story, memory and chat. Reconnecting reads the payments again and starts a new memory. PayPal's consent stays until the person removes it there. | "Forgets the link" keeps nothing behind, with no second store of a judge's data to clean up. Confirmed by the user at U10 review |
 | Nov 5 | Rows that aren't spending (money coming in, bank withdrawals, currency conversions) go to rows left out with a reason. | Own accounts can hold them, and they would have counted as negative or false spending |
+| Nov 5 | U14 cut. Chat answers a request to cancel from code, with no LLM call, and points to PayPal's settings | Soul can't cancel or even read a subscription on a connected account, and the prepared ones are shared by every visitor. A fixed reply can never sound as if it was cancelled |
 
 ## 6. Open questions
 1. Settled at G5: anonymous Supabase users for the private copy.
 2. Do daily subscription charges repeat? Check the prepared account on Nov 3–4. If they don't, the 7-day minimum isn't met by Nov 9 and the prepared story stays thin.
 3. Does the $1 send money test stay in the prepared story? It wasn't in the report rows when last checked.
 4. On prepared data, sending money needs the person's own sandbox login to approve. Which recipient is prefilled? Answered in U9 (Nov 5): Soul's test account (the second sandbox personal account, `PAYPAL_SEND_RECIPIENT`), with another sandbox email as the other choice. The amount is $25.00, fixed on the server.
-5. Cancel subscription (U14) needs a check that consent covers it on another account.
+5. Answered Nov 5: consent doesn't cover subscriptions, so U14 was cut. The Platform app gets 404 reading a subscription for the consented buyer, also after a test consent added `billing-agreements`. A subscription belongs to the merchant; the buyer is the subscriber.
 6. A second developer login is untested, to be tested before deployment finishes (reminder in PROGRESS.md).
 7. Supabase free projects pause after a week idle, and both slots go to Staging and Prod. The daily job pings, or use a paid plan.
