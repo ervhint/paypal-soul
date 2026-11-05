@@ -2,10 +2,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { post, useApi } from "@/lib/use-api";
+import { useApi } from "@/lib/use-api";
 import { Skeleton, Toast, useToast } from "@/components/ui";
 import { titleCase } from "@/lib/title-case";
-import type { Memory, Payment } from "@/lib/mock";
+import type { Memory, Payment } from "@/lib/types";
 
 const CHIPS = 5;
 type Data = { memory: Memory[]; payments: Payment[] };
@@ -25,6 +25,14 @@ export default function MemoryPage() {
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
   const toast = useToast();
+
+  const remove = async () => {
+    setBusy("delete");
+    const r = await fetch("/api/me", { method: "DELETE" }).catch(() => null);
+    if (r?.ok) return router.push("/?deleted=1");
+    setBusy(null);
+    toast.show("Soul couldn't delete your data just now. Try again in a moment.");
+  };
 
   // Each change rewrites the story first, so it takes a few seconds and can fail with nothing changed.
   const change = async (m: Memory, body: object, done: string) => {
@@ -105,10 +113,10 @@ export default function MemoryPage() {
       )}
       <section className="danger">
         <h2>Delete My Data</h2>
-        <p>Removes your corrections, memory, chat and saved chapters from Soul. Your PayPal sandbox account isn&rsquo;t touched.</p>
+        <p>Removes your corrections, memory, chat and saved chapters from Soul, and the link to your sandbox if you connected one. Your PayPal sandbox account isn&rsquo;t touched.</p>
         {deleting ? (
           <div className="row" style={{ marginTop: 14 }}>
-            <button className="btn line small" onClick={async () => { await post("/api/reset"); router.push("/?deleted=1"); }}>Yes, Delete It All</button>
+            <button className="btn line small" disabled={!!busy} onClick={remove}>{busy === "delete" ? "Deleting…" : "Yes, Delete It All"}</button>
             <button className="btn small" onClick={() => setDeleting(false)}>Keep My Data</button>
           </div>
         ) : (

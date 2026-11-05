@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { post, useApi } from "@/lib/use-api";
 import { PaymentRow, Sheet, money } from "@/components/ui";
-import type { Payment } from "@/lib/mock";
+import type { Payment } from "@/lib/types";
 import { titleCase } from "@/lib/title-case";
 
 type Msg = { role: "user" | "soul"; text: string; sources: Payment[]; none: boolean };

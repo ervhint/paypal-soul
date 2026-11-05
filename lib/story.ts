@@ -8,7 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { categoryLabel, categoryView, paymentName } from "@/lib/categories";
 import type { AskJson } from "@/lib/llm";
-import type { Change, Chapter, Memory, Payment } from "@/lib/mock";
+import type { Change, Chapter, Memory, Payment } from "@/lib/types";
 import { titleCase } from "@/lib/title-case";
 import { repeats, totals, weekOf, type Repeat, type StoryPayment, type Sureness } from "@/lib/totals";
 

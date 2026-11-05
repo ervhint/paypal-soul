@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { Payment } from "@/lib/mock";
+import type { Payment } from "@/lib/types";
 import { titleCase } from "@/lib/title-case";
 
 export const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });

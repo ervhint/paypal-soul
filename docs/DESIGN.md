@@ -96,7 +96,7 @@ In `app/globals.css`. Black page over `public/assets/bg.mp4` with a flat 80% dar
 | S-10 | `/buy`, then S-13, then back to `/story` with the new chapter once paid |
 | S-11 | `/about` |
 
-Mock data comes from BFF routes under `app/api/*`, backed by `lib/mock.ts` (in memory, cleared by Delete my data). Transaction IDs, the fee on done and the rows left out are prototype values.
+Data comes from BFF routes under `app/api/*`, backed by Supabase and the PayPal sandbox since P6 (the prototype store `lib/mock.ts` was removed in U11).
 
 ## Image list (P4)
 No screen needs a new picture. Every screen uses the background video, the logo, and Font Awesome icons (coffee, bus, basket, carrot, signal, paper plane). Nothing is blank or dropped. Ask if you want photos or illustrations on any page.

@@ -6,7 +6,7 @@ import { post, useApi } from "@/lib/use-api";
 import { Empty, PaymentRow, Sheet, Skeleton, Toast, money, useToast } from "@/components/ui";
 import { titleCase } from "@/lib/title-case";
 import type { Action } from "@/lib/action";
-import type { Chapter, Change, Claim, LeftOut, Memory, Payment } from "@/lib/mock";
+import type { Chapter, Change, Claim, LeftOut, Memory, Payment } from "@/lib/types";
 
 type Story = {
   chapters: Chapter[];
