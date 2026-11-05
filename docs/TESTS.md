@@ -18,7 +18,7 @@ Words used here:
 
 Other terms (RLS, BFF, LCP, capture, sandbox …) are explained in the word list at the top of docs/PLAN.md.
 
-Latest run: 2026-11-04, U8: T-8.1 to T-8.5 ✅. Before that, U1: T-1.1 to T-1.5 ✅. Before that, 2026-11-03, U0: T-0.1 to T-0.7 and NF-4 ✅.
+Latest run: 2026-11-05, U10: T-10.1, T-10.3, T-10.4, T-10.5 ✅, T-10.2 partly. Before that, 2026-11-04, U8: T-8.1 to T-8.5 ✅. Before that, U1: T-1.1 to T-1.5 ✅. Before that, 2026-11-03, U0: T-0.1 to T-0.7 and NF-4 ✅.
 
 ## Phase A: Setup
 
@@ -116,11 +116,11 @@ Latest run: 2026-11-04, U8: T-8.1 to T-8.5 ✅. Before that, U1: T-1.1 to T-1.5 
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-10.1 | AC-10.1 | e2e, manual consent | Click Log In With PayPal. Approve on PayPal sandbox yourself. Return, or click Check Connection on `/connect`. | Soul finds the account ID and imports the payments. | ⏭ | |
-| T-10.2 | AC-10.2 | e2e | Open `/connect` without finishing consent, then with consent refused. Click Check Connection. | The pending or denied state shows, with the prepared-data offer. | ⏭ | |
-| T-10.3 | AC-10.3 | unit | Import accounts that each miss one rule: under 7 days, under 5 payments, no name seen on 2 or more days. | The result names what is missing and offers the prepared data. | ⏭ | |
-| T-10.4 | AC-10.4 | e2e | Connect a sandbox. Switch to Prepared Data and back through the header menu. | Each side keeps its own memory and chat. No new login is asked. | ⏭ | |
-| T-10.5 | AC-10.5 | e2e | Click Log Out of My Sandbox. | Soul forgets the link and returns to `/`. | ⏭ | |
+| T-10.1 | AC-10.1 | e2e, manual consent | Click Log In With PayPal. Approve on PayPal sandbox yourself. Return, or click Check Connection on `/connect`. | Soul finds the account ID and imports the payments. | ✅ | 2026-11-05 Chrome: the user approved on PayPal, PayPal didn't return by itself, the check found the account and imported 11 payments and 18 rows left out, all categorised. `tests/connect.test.ts`: ready moves the person onto their sandbox |
+| T-10.2 | AC-10.2 | e2e | Open `/connect` without finishing consent, then with consent refused. Click Check Connection. | The pending or denied state shows, with the prepared-data offer. | ⏳ | 2026-11-05 Chrome: pending shown live with the prepared-data offer. Denied (no scope, 403 read) only in `tests/connect.test.ts`, not forced live. The no-history account showed the empty state live with the offer, and My Sandbox below the minimum went to `/connect` |
+| T-10.3 | AC-10.3 | unit | Import accounts that each miss one rule: under 7 days, under 5 payments, no name seen on 2 or more days. | The result names what is missing and offers the prepared data. | ✅ | 2026-11-05 `tests/connect.test.ts`: each missing rule. Chrome: real account showed 3 of 7 Days, 11 Payments, 2 Repeats, with the prepared-data offer |
+| T-10.4 | AC-10.4 | e2e | Connect a sandbox. Switch to Prepared Data and back through the header menu. | Each side keeps its own memory and chat. No new login is asked. | ✅ | 2026-11-05 Chrome, with one test payment dated Oct 28 to pass the minimum: chapters changed at once on `/story`, memory 2 and 3 beliefs, chat 2 and 16 messages kept both ways, no new login. Also `tests/connect.test.ts` |
+| T-10.5 | AC-10.5 | e2e | Click Log Out of My Sandbox. | Soul forgets the link and returns to `/`. | ✅ | 2026-11-05 Chrome: landed on `/` with the toast, header offers Log In With PayPal, no own account left on Staging, prepared still 14 payments, 16 chat messages, 3 beliefs. Also `tests/connect.test.ts` |
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |

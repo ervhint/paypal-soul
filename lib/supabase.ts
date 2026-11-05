@@ -3,9 +3,14 @@
 // person. The secret key is for shared tables (accounts, payments, rows left out) only (PLAN §3).
 import { createServerClient, type CookieMethodsServer } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { minimumFound, type StoryPayment } from "@/lib/totals";
 
 export type Source = "prepared" | "own";
-export type Visitor = { id: string; accountId: string | null; source: Source | null; connected: boolean };
+/** `linking`: they started consent, finished or not. `connected`: PayPal gave Soul their account ID. */
+export type Visitor = { id: string; accountId: string | null; source: Source | null; connected: boolean; linking: boolean };
+
+/** An own account's PayPal ID until consent finishes. */
+export const PENDING = "pending";
 
 const url = () => process.env.SUPABASE_URL!;
 const noSession = { auth: { persistSession: false, autoRefreshToken: false } };
@@ -59,12 +64,18 @@ export async function choosePrepared(db: SupabaseClient, ip: string | null) {
   return id;
 }
 
-/** My Sandbox: only once the visitor has connected one (U10). Returns false when they haven't. */
+/** An account's saved payments against the minimum for a story. */
+export async function accountMinimum(db: SupabaseClient, accountId: string) {
+  const pays = await must(db.from("payment").select("id, paypal_txn_id, occurred_at, amount, currency, name, event_code, category").eq("account_id", accountId));
+  return minimumFound(pays as StoryPayment[]);
+}
+
+/** My Sandbox: only once one is connected with enough for a story (U10). Returns false otherwise. */
 export async function chooseOwn(db: SupabaseClient) {
   const id = await userId(db);
   if (!id) return false;
-  const own = await must(db.from("paypal_account").select("id").eq("kind", "own").limit(1));
-  if (!own.length) return false;
+  const own = await must(db.from("paypal_account").select("id").eq("kind", "own").neq("paypal_account_id", PENDING).limit(1));
+  if (!own.length || !(await accountMinimum(db, own[0].id)).ok) return false;
   await must(db.from("person").update({ account_id: own[0].id }).eq("id", id));
   return true;
 }
@@ -77,7 +88,7 @@ export async function currentVisitor(db: SupabaseClient): Promise<Visitor | null
     db.from("person").update({ last_visit_at: new Date().toISOString() }).eq("id", id).select("account_id, paypal_account(kind)").maybeSingle(),
   );
   if (!person) return null;
-  const own = await must(db.from("paypal_account").select("id").eq("kind", "own").limit(1));
+  const own = await must(db.from("paypal_account").select("paypal_account_id").eq("kind", "own").limit(1));
   const account = person.paypal_account as unknown as { kind: Source } | null;
-  return { id, accountId: person.account_id as string | null, source: account?.kind ?? null, connected: own.length > 0 };
+  return { id, accountId: person.account_id as string | null, source: account?.kind ?? null, connected: own.some((a) => a.paypal_account_id !== PENDING), linking: own.length > 0 };
 }

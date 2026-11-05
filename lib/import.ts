@@ -16,6 +16,8 @@ export const LEFT_OUT_LABELS: Record<string, string> = {
   T1900: "General account correction",
   T0300: "Bank deposit to PayPal account",
   T0006: "PayPal checkout payment",
+  T0200: "Currency conversion",
+  T0400: "Withdrawal to bank",
 };
 
 export type Account = { id: string; paypal_account_id: string; synced_through: string | null };
@@ -57,6 +59,8 @@ export function sortRows(rows: PayPalTxn[]): Sorted {
     if (i.transaction_event_code === "T1900") leftOut.push({ ...base, amount, reason: "PayPal's opening test balance, not something you bought." });
     else if (i.transaction_event_code === "T0300") funded.push(t);
     else if (i.transaction_status === "D" || i.transaction_status === "V") leftOut.push({ ...base, amount: -amount, reason: "PayPal didn't complete this payment." });
+    else if (/^T0[24]/.test(i.transaction_event_code)) leftOut.push({ ...base, amount: Math.abs(amount), reason: "Money moved to your bank or between currencies, not something you bought." });
+    else if (amount > 0) leftOut.push({ ...base, amount, reason: "Money that came in, not something you bought." });
     else {
       const name = i.transaction_subject || t.cart_info?.item_details?.[0]?.item_name || i.transaction_note || null;
       payments.push({ ...base, amount: -amount, name, payee: t.payer_info?.payer_name?.alternate_full_name || null });

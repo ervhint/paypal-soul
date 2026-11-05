@@ -13,9 +13,11 @@ export default function Welcome() {
   const toast = useToast();
   const { show } = toast;
   useEffect(() => {
-    if (new URLSearchParams(location.search).get("deleted") !== "1") return;
+    const q = new URLSearchParams(location.search);
+    const said = q.get("deleted") === "1" ? "Deleted. Your corrections, memory and chat are gone." : q.get("loggedout") === "1" ? "Logged out. Your sandbox story, memory and chat are gone." : null;
+    if (!said) return;
     history.replaceState(null, "", "/");
-    show("Deleted. Your corrections, memory and chat are gone.");
+    show(said);
   }, [show]);
   const prepared = async () => {
     const r = await post("/api/connect", { source: "prepared" });

@@ -30,6 +30,10 @@ const DAY = 86_400_000;
 const cents = (n: number) => Math.round(n * 100);
 const sum = (ps: StoryPayment[]) => ps.reduce((t, p) => t + cents(p.amount), 0) / 100;
 
+/** What an own sandbox needs for a story (AC-10.3). */
+export const MINIMUM = { days: 7, payments: 5, repeats: 1 };
+export type Found = { days: number; payments: number; repeats: number };
+
 export const dayOf = (iso: string) => new Date(iso).toISOString().slice(0, 10);
 
 /** The Monday (UTC) of the week a payment falls in, as YYYY-MM-DD. */
@@ -105,4 +109,12 @@ export function totals(pays: StoryPayment[]) {
       .map(([category, ps]) => ({ category: categoryLabel(category), payments: ps.length, spent: sum(ps) }))
       .sort((a, b) => b.spent - a.spent),
   };
+}
+
+/** What an account has against the minimum: days from its first payment to its last (both counted), payments and repeats. */
+export function minimumFound(pays: StoryPayment[]): Found & { ok: boolean } {
+  const spent = pays.filter((p) => p.amount > 0);
+  const dates = spent.map((p) => +new Date(dayOf(p.occurred_at)));
+  const found = { days: spent.length ? (Math.max(...dates) - Math.min(...dates)) / DAY + 1 : 0, payments: spent.length, repeats: repeats(spent).length };
+  return { ...found, ok: found.days >= MINIMUM.days && found.payments >= MINIMUM.payments && found.repeats >= MINIMUM.repeats };
 }

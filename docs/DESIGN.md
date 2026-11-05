@@ -82,7 +82,7 @@ In `app/globals.css`. Black page over `public/assets/bg.mp4` with a flat 80% dar
 | Screen | Where |
 | --- | --- |
 | S-01 | `/`, two options: prepared data, or Log in with PayPal with the minimum-data note |
-| S-12 | `/connect`: before PayPal, Check connection, and `?state=pending`, `denied`, `little`, `empty` (each offers the prepared data) |
+| S-12 | `/connect`: before PayPal, Check connection, and in development `?state=pending`, `denied`, `little`, `empty`, `offline` (each offers the prepared data) |
 | S-13 | `/action/status?id=`: PayPal link, waiting, cancelled, link ran out, for send money and purchases |
 | S-14 | "Why are some rows missing?" sheet on `/story`, with the rows left out |
 | S-15 | Delete my data, on `/memory`, removes only that person's data |

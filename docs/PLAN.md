@@ -474,6 +474,8 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 3 | U0 architecture: the browser never talks to Supabase. The BFF holds the anonymous session in a cookie and calls Supabase with the anon key, so RLS still applies per person. The secret key is used only for shared tables, captures and the daily job. No `NEXT_PUBLIC_` variables, which is stricter than NF-3 | Workflow rule 13, and nothing to leak from the bundle |
 | Nov 3 | Personal rows are keyed by person and account. The import cursor is a column on the account, and questions per day are counted from chat, so `import_cursor` and `usage` tables were dropped | Each data source keeps its own memory (AC-10.4), with two fewer tables |
 | Nov 3 | Actions are read-only for people. Shared tables are written only by the server | A person can't mark a payment completed or add fake payments, even with their own token |
+| Nov 5 | Log Out of My Sandbox deletes the person's own account row, and with it that sandbox's payments, story, memory and chat. Reconnecting reads the payments again and starts a new memory. PayPal's consent stays until the person removes it there. | "Forgets the link" keeps nothing behind, with no second store of a judge's data to clean up. Confirmed by the user at U10 review |
+| Nov 5 | Rows that aren't spending (money coming in, bank withdrawals, currency conversions) go to rows left out with a reason. | Own accounts can hold them, and they would have counted as negative or false spending |
 
 ## 6. Open questions
 1. Settled at G5: anonymous Supabase users for the private copy.

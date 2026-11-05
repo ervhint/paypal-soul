@@ -46,6 +46,8 @@ async function token(id: string, secret: string) {
   return j.access_token;
 }
 
+const platformToken = () => token(process.env.PAYPAL_PLATFORM_CLIENT_ID!, process.env.PAYPAL_PLATFORM_CLIENT_SECRET!);
+
 const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const iso = (d: Date) => `${d.toISOString().slice(0, 19)}Z`;
 
@@ -53,7 +55,7 @@ const iso = (d: Date) => `${d.toISOString().slice(0, 19)}Z`;
 export async function readTransactions(payerId: string, start: Date, end: Date): Promise<Page> {
   const id = process.env.PAYPAL_PLATFORM_CLIENT_ID!;
   const headers = {
-    Authorization: `Bearer ${await token(id, process.env.PAYPAL_PLATFORM_CLIENT_SECRET!)}`,
+    Authorization: `Bearer ${await platformToken()}`,
     "PayPal-Auth-Assertion": `${b64({ alg: "none" })}.${b64({ iss: id, payer_id: payerId })}.`,
   };
   const rows: PayPalTxn[] = [];
@@ -69,6 +71,68 @@ export async function readTransactions(payerId: string, start: Date, end: Date):
   }
   return { rows, lastRefreshed };
 }
+
+/** Consent through the Platform app (U10): a link to PayPal's page, and what PayPal says came of it. */
+export type Consent = {
+  link: (trackingId: string, returnUrl: string) => Promise<string>;
+  /** null until the person has approved on PayPal. `canRead` says the approval covers reading payments. */
+  find: (trackingId: string) => Promise<{ payerId: string; canRead: boolean } | null>;
+};
+
+const SEARCH_SCOPE = "https://uri.paypal.com/services/reporting/search/read";
+let partner: string | undefined;
+
+/** The Platform app's own PayPal account ID, which its report states, so it needs no setting of its own. */
+async function partnerId(headers: Record<string, string>) {
+  if (partner) return partner;
+  const now = new Date();
+  const q = new URLSearchParams({ start_date: iso(new Date(+now - 86_400_000)), end_date: iso(now), page_size: "1" });
+  const r = await fetch(`${base}/v1/reporting/transactions?${q}`, { headers, cache: "no-store" });
+  if (!r.ok) throw new PayPalError(r.status, `PayPal partner lookup returned ${r.status}`);
+  partner = ((await r.json()) as { account_number: string }).account_number;
+  return partner;
+}
+
+export const paypalConsent: Consent = {
+  link: async (trackingId, returnUrl) => {
+    const r = await fetch(`${base}/v2/customer/partner-referrals`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${await platformToken()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tracking_id: trackingId,
+        partner_config_override: { return_url: returnUrl, return_url_description: "Return to Soul" },
+        operations: [
+          {
+            operation: "API_INTEGRATION",
+            api_integration_preference: {
+              rest_api_integration: { integration_method: "PAYPAL", integration_type: "THIRD_PARTY", third_party_details: { features: ["ADVANCED_TRANSACTIONS_SEARCH", "ACCESS_MERCHANT_INFORMATION"] } },
+            },
+          },
+        ],
+        legal_consents: [{ type: "SHARE_DATA_CONSENT", granted: true }],
+      }),
+      cache: "no-store",
+    });
+    if (!r.ok) throw new PayPalError(r.status, `PayPal referral returned ${r.status}`);
+    const link = ((await r.json()) as { links?: { rel: string; href: string }[] }).links?.find((l) => l.rel === "action_url")?.href;
+    if (!link) throw new PayPalError(502, "PayPal referral came back without a link");
+    return link;
+  },
+  find: async (trackingId) => {
+    const headers = { Authorization: `Bearer ${await platformToken()}` };
+    const path = `${base}/v1/customer/partners/${await partnerId(headers)}/merchant-integrations`;
+    const r = await fetch(`${path}?tracking_id=${encodeURIComponent(trackingId)}`, { headers, cache: "no-store" });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new PayPalError(r.status, `PayPal consent lookup returned ${r.status}`);
+    const payerId = ((await r.json()) as { merchant_id?: string }).merchant_id;
+    if (!payerId) return null;
+    const d = await fetch(`${path}/${encodeURIComponent(payerId)}`, { headers, cache: "no-store" });
+    if (!d.ok) throw new PayPalError(d.status, `PayPal consent details returned ${d.status}`);
+    const { oauth_integrations } = (await d.json()) as { oauth_integrations?: { oauth_third_party?: { partner_client_id?: string; scopes?: string[] }[] }[] };
+    const grants = (oauth_integrations ?? []).flatMap((o) => o.oauth_third_party ?? []);
+    return { payerId, canRead: grants.some((g) => g.partner_client_id === process.env.PAYPAL_PLATFORM_CLIENT_ID && g.scopes?.includes(SEARCH_SCOPE)) };
+  },
+};
 
 /** An order as Soul reads it: its status and, once paid, the capture. */
 export type PayPalOrder = {

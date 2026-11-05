@@ -17,6 +17,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [view, setView] = useState(0); // a new value remounts the page, so it reads the data just chosen
   const source = useRef<HTMLDivElement>(null);
   const { data, reload } = useApi<{ source: "prepared" | "own" | null; connected: boolean }>("/api/connect");
   const video = useRef<HTMLVideoElement>(null);
@@ -28,9 +29,13 @@ export function Shell({ children }: { children: ReactNode }) {
     setMenu(false);
     reload();
   }, [path, reload]);
+  // Connecting finishes without a change of path, so a menu reads the data again as it opens.
+  useEffect(() => {
+    if (menu || open) reload();
+  }, [menu, open, reload]);
   useEffect(() => {
     if (!menu) return;
-    const onDown = (e: PointerEvent) => !source.current?.contains(e.target as Node) && setMenu(false);
+    const onDown =(e: PointerEvent) => !source.current?.contains(e.target as Node) && setMenu(false);
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
   }, [menu]);
@@ -56,19 +61,21 @@ export function Shell({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const closeAll = async () => {
+  const closeAll = async (to: string) => {
     setMenu(false);
     setOpen(false);
     await reload();
-    router.push("/story");
+    setView((n) => n + 1);
+    router.push(to);
   };
+  // A sandbox below the minimum isn't chosen: /connect says what's missing.
   const choose = async (next: "prepared" | "own") => {
-    await post("/api/connect", { source: next });
-    await closeAll();
+    const r = await post("/api/connect", { source: next });
+    await closeAll(r.ok ? "/story" : "/connect");
   };
   const logOut = async () => {
     await fetch("/api/connect", { method: "DELETE" });
-    await closeAll();
+    await closeAll("/?loggedout=1");
   };
   const toggleVideo = () => {
     if (paused) video.current?.play();
@@ -141,7 +148,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           </>
         )}
-        <main id="main" className="main" tabIndex={-1}>{children}</main>
+        <main key={view} id="main" className="main" tabIndex={-1}>{children}</main>
       </div>
       <button className={`video-toggle${path === "/chat" ? " raised" : ""}`} onClick={toggleVideo} aria-label={paused ? "Play Background Video" : "Pause Background Video"}>
         <i className={`fa-solid fa-${paused ? "play" : "pause"}`} aria-hidden="true" />
