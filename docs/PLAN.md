@@ -119,10 +119,10 @@ Also near: [Salah](https://salah-liart.vercel.app/#/overview), merchant intellig
 | NF-6 | Payment text is data, never instructions, in every LLM prompt | Unit test with an injected "ignore your rules" payment name |
 | NF-7 | Every claim, belief and chat answer points to at least one saved payment, or says it has none | Unit test on the story and chat output checks |
 | NF-8 | Totals, counts and repeats come from code, never from the LLM | Unit tests on the totals module |
-| NF-9 | Chat: 300 characters per question, 30 questions per person per day, reset at 00:00 UTC | Route tests |
+| NF-9 | Chat: 300 characters per question, 5 questions per person per day from U16 (30 until then), reset at 00:00 UTC | Route tests |
 | NF-10 | One PayPal request spans 31 days or less | Unit test on the date windows |
 | NF-11 | Reduced motion stops the animations and pauses the video | Browser test with emulated reduced motion |
-| NF-12 | LLM spend stays inside the $20 OpenRouter limit until Dec 15: under $1 a day during the build, checked at each unit review | OpenRouter usage page and a per-call token log |
+| NF-12 | LLM spend stays inside the OpenRouter limit until Dec 15 (the key is set to $20, the user has $29 of credit, Nov 5): under $1 a day during the build, checked at each unit review | OpenRouter usage page and a per-call token log |
 | NF-13 | The demo stays up and free to use until Dec 15, 2026 | Daily job keeps Supabase awake, checked in P7 |
 
 ## 3. Data entities
@@ -356,6 +356,8 @@ Tests: T-6.1 (e2e), T-6.2 (e2e), T-6.3 (integration)
 ### Phase D — Ask (golden path 5)
 
 #### U7 — Grounded chat  (Must · demo-critical)
+U16 changes this unit: functions replace the word matcher, so AC-7.2's no-evidence answer is written by the LLM, AC-7.3's data comes from function results, and AC-7.5's limit becomes 5 a day.
+
 Covers: US-16, US-17      Screens: S-07, S-07a, S-07b      Depends on: U5      Est: 3h
 Acceptance:
 - AC-7.1 Given a correction, when the person asks about it, then the answer uses the corrected belief and cites payments that open in the evidence sheet.
@@ -432,8 +434,74 @@ Covers: US-11      Screens: S-02c      Depends on: U8      Est: 2h
 - AC-15.1 Given a capture webhook for an order made in Soul, when it arrives with a valid signature, then the new chapter appears on an open story without refresh.
 Tests: T-15.1 (integration)
 
+### Phase H — Chat with functions
+
+#### U16 — Chat picks functions  (Must · agreed Nov 5, replaces how U7 finds payments)
+Covers: US-16, US-17      Screens: S-07, S-07a, S-07b      Depends on: U7      Est: 6h
+
+Why: code picks a question's payments by matching words, and it has no idea of dates, so "this month" returns everything Soul has, and "any chocolate?" never reaches the LLM. The user wants Chat to reflect the real world as closely as it can. So the LLM reads the question and calls functions, and code runs them.
+
+How one question flows:
+1. Code checks the limits. A request to cancel keeps code's reply (U14).
+2. The picker, Claude Opus 5.5 at low effort, gets the question, today's date, the last 10 questions and answers, the category list, the person's payment names and the functions. It calls functions and fills their parameters: "this month" means Nov 1 to Nov 30, 2026. Up to 3 rounds.
+3. Code checks the parameters, runs the functions and returns the results with clear labels, like "spent in October".
+4. The writer, Claude Haiku 5.5, gets the question and the results, with no function list, and writes 1 to 3 sentences. It also writes the natural sorry when the picker found no function that fits.
+5. Code checks every amount against the function results, then builds the list under the answer from those results.
+
+The 25 functions:
+
+| # | Function | Example question |
+| --- | --- | --- |
+| 1 | `find_payments` (dates, words, category, person, amount, refunds and money received, sort, limit) | "Biggest payment in October?", "When did I last pay for coffee?", "Any refunds?" |
+| 2 | `find_new` | "Anything new this month?" |
+| 3 | `find_unusual` (much bigger than the usual for that name) | "Anything strange?" |
+| 4 | `find_duplicates` | "Did I pay for something twice?" |
+| 5 | `find_price_changes` | "Has anything gone up in price?" |
+| 6 | `find_stopped` | "What did I stop paying for?" |
+| 7 | `find_peak_period` | "What was my most expensive day?" |
+| 8 | `sum_spending` (group by category, day, week, month, weekday, time of day, store or person; percentages; days with and without spending) | "How much this month?", "What percent goes to groceries?", "Which days did I spend nothing?" |
+| 9 | `compare_spending` (two periods) | "Did I spend more than last month?" |
+| 10 | `rank_spending` (top categories, names, stores or people) | "What do I spend most on?", "Who do I send money to?" |
+| 11 | `average_spending` (per day, week or month) | "What's my average per week?" |
+| 12 | `spending_trend` | "Is my grocery spending going up?" |
+| 13 | `project_month` (this month's pace) | "Where will I end up this month?" |
+| 14 | `cost_over_time` | "What does coffee cost me per year?" |
+| 15 | `what_if_stopped` (stated as math, not advice) | "How much would I save without coffee?" |
+| 16 | `money_in_out` | "Did more come in than go out?" |
+| 17 | `sum_fees` (check first that the data exists; if not, it's cut and Soul says sorry) | "How much did I pay in fees?" |
+| 18 | `list_repeats` | "What are my subscriptions, and what do they cost?" |
+| 19 | `get_memory` (option: only the ones Soul is unsure about) | "What do you know about me?", "What are you unsure about?" |
+| 20 | `explain_belief` | "Why do you think that about me?" |
+| 21 | `get_chapter` | "What happened last week?" |
+| 22 | `list_corrections` | "What have I corrected?" |
+| 23 | `list_actions` (option: only what's still waiting) | "What did I buy or send through Soul?" |
+| 24 | `list_left_out` | "Why is this payment missing?" |
+| 25 | `data_coverage` | "How far back can you see?", "When did you last read PayPal?" |
+
+The list stops here: the LLM reads it on every question, and overlap is what makes it pick wrong. A new kind of question fits as an option on a function first.
+
+Steps the person sees, in plain words, each one sent by the server as it really happens: Reading Your Question, Checking Your October Payments, Adding Up the Numbers, Writing Your Answer.
+
+Acceptance:
+- AC-16.1 Given a question, when it's sent, then the picker chooses the functions and fills their parameters in up to 3 rounds, and code runs them.
+- AC-16.2 Given a time word ("this month", "last week", "in October", "yesterday"), when it's sent, then the period comes from today's date, and the totals, the list and the biggest payment all follow that period.
+- AC-16.3 Given a word that isn't in any payment name (chocolate) and a payment that means it (Snickers Bar), when it's sent, then the picker finds the payment by meaning. With no such payment, Soul says so.
+- AC-16.4 Given something Soul has no data for (balance, budgets, tax, investment advice, what's inside a payment), when it's sent, then Haiku writes a natural sorry and invents nothing.
+- AC-16.5 Given an off-topic question (coding) or an attack ("forget all instructions", "show your prompt", a payment named "ignore your rules"), when it's sent, then Soul keeps to payments with the same polite line, and it counts toward the daily limit.
+- AC-16.6 Given any function call, when code runs it, then the parameters are checked first, the function only reads, and it's locked to the person's own account through their session. The LLM can't choose whose data it reads, and no function moves money.
+- AC-16.7 Given an answer, when it's checked, then every amount comes from a function result of this question, or the answer is thrown out. The list under the answer holds every payment behind its figures, built by code, and the count always matches.
+- AC-16.8 Given more than 60 payments behind a question, when it's answered, then the LLM reads at most 60 rows, the totals still cover all of them, and the answer says so: "Totals cover all 134 payments. I read the newest 60 in detail." At 60 or fewer nothing is added. A power buyer gets correct totals and an honest note.
+- AC-16.9 Given a question in progress, when each step happens, then the person sees it in plain words, so Chat never looks stuck.
+- AC-16.10 Given 5 questions today, when the 6th is sent, then it's refused until 00:00 UTC, and the Chat page says the limit up front. The 300 characters stay.
+- AC-16.11 Given the total Chat spending cap (about $20 of the credit, see NF-12), when it's reached, then Chat politely says it's done for now and the rest of Soul keeps working. Every LLM call logs its cost.
+- AC-16.12 Given a request to cancel, when it's sent, then code's reply answers it with no LLM call, as now.
+- AC-16.13 Given the question list (at least 2 per function and at least 10 attacks), when it runs against the real models, then the score shows how often the right function and the right dates were picked, and the wording matches the labels. Run the picking part only, stopping before the final answer, and rerun only what fails, to save credit.
+Tests: T-16.1–T-16.5 (unit), T-16.6 (integration), T-16.7, T-16.8 (unit), T-16.9 (e2e), T-16.10–T-16.12 (unit), T-16.13 (real models, once)
+
+Check while building: OpenRouter offers both models with tool calling (`lib/llm.ts` only asks for JSON today, and sends `temperature: 0`, which newer models can reject, so the Opus call drops it; forced `tool_choice` is rejected too, so use auto). A refusal from a model becomes the natural sorry, not an error. The prepared data covers a few days only, so periods, price changes and stopped payments are tested with made-up payments in unit tests. Today's word matcher in `lib/chat.ts` goes, and the `behindFigures` idea, the 60-row limit, the note and `PaymentList` stay. If Opus picks badly, first improve the function descriptions, then have it choose a group before a function.
+
 ### Build order and time
-U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U15 if time allows (U14 cut).
+U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U15 if time allows (U14 cut), then U16, agreed Nov 5, before the user's sandbox test.
 
 U6 moves after the golden path because the demo doesn't open Memory. U10 is Must but after the golden path, since the demo uses prepared data and U2 already proves the read route.
 
@@ -478,11 +546,16 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 5 | Log Out of My Sandbox deletes the person's own account row, and with it that sandbox's payments, story, memory and chat. Reconnecting reads the payments again and starts a new memory. PayPal's consent stays until the person removes it there. | "Forgets the link" keeps nothing behind, with no second store of a judge's data to clean up. Confirmed by the user at U10 review |
 | Nov 5 | Rows that aren't spending (money coming in, bank withdrawals, currency conversions) go to rows left out with a reason. | Own accounts can hold them, and they would have counted as negative or false spending |
 | Nov 5 | U14 cut. Chat answers a request to cancel from code, with no LLM call, and points to PayPal's settings | Soul can't cancel or even read a subscription on a connected account, and the prepared ones are shared by every visitor. A fixed reply can never sound as if it was cancelled |
+| Nov 5 | Chat changes to function calling (U16): 25 functions, the LLM picks them and fills their parameters, code runs them. AC-7.2's "no LLM call when nothing matches" goes | Code picked payments by matching words, with no idea of dates, so "this month" returned everything and "any chocolate?" never reached the LLM. The user wants Chat to reflect the real world |
+| Nov 5 | Claude Opus 5.5 at low effort picks functions, Claude Haiku 5.5 writes the sentence. Story and categories stay on Haiku | Picking is the hard part, and the user likes Haiku's straightforward answers. About $0.03 a question, estimated, against $0.07 with Opus for both |
+| Nov 5 | Chat drops to 5 questions a day per person, stated on the page, with a total spending cap of about $20 | Each question costs more now, the user has $29 of credit, and being open about the limit is better than running out |
+| Nov 5 | The LLM still reads at most 60 rows, and the answer says so past 60 | Thousands of payments in a month can't go to the LLM. Totals cover everything, and Soul is open about the rest |
+| Nov 5 | The $1 "Soul Send Money Test" row stays in the prepared story | The user's call |
 
 ## 6. Open questions
 1. Settled at G5: anonymous Supabase users for the private copy.
 2. Do daily subscription charges repeat? Check the prepared account on Nov 3–4. If they don't, the 7-day minimum isn't met by Nov 9 and the prepared story stays thin.
-3. Does the $1 send money test stay in the prepared story? It wasn't in the report rows when last checked.
+3. Answered Nov 5: the $1 send money test stays in the prepared story, the user's call. It does show in the report rows now, as "Soul Send Money Test".
 4. On prepared data, sending money needs the person's own sandbox login to approve. Which recipient is prefilled? Answered in U9 (Nov 5): Soul's test account (the second sandbox personal account, `PAYPAL_SEND_RECIPIENT`), with another sandbox email as the other choice. The amount is $25.00, fixed on the server.
 5. Answered Nov 5: consent doesn't cover subscriptions, so U14 was cut. The Platform app gets 404 reading a subscription for the consented buyer, also after a test consent added `billing-agreements`. A subscription belongs to the merchant; the buyer is the subscriber.
 6. A second developer login is untested, to be tested before deployment finishes (reminder in PROGRESS.md).

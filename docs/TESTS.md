@@ -139,6 +139,24 @@ Latest run: 2026-11-05, U10: T-10.1, T-10.3, T-10.4, T-10.5 ✅, T-10.2 partly. 
 | T-14.1 | AC-14.1 | e2e | Open a daily subscription habit. Confirm Cancel on `/action/confirm`. | Soul cancels it in the sandbox and the story notes the change. If PayPal refuses, the failed page says nothing changed. | cut | U14 cut Nov 5. Chat's reply to a request to cancel: `tests/chat.test.ts`, "asking to cancel" |
 | T-15.1 | AC-15.1 | integration | Post a capture webhook with a valid signature for a Soul order. | The new chapter appears on an open story without refresh. | ⏭ | |
 
+## Phase H: Chat with functions
+
+| ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| T-16.1 | AC-16.1 | unit | Ask with a mocked picker that calls functions over 1, 2 and 4 rounds. | Code runs each function and stops at 3 rounds. | ⏭ | |
+| T-16.2 | AC-16.2 | unit | Made-up payments across months. Ask with each time word. | The period is right from today's date, and totals, list and biggest payment follow it. | ⏭ | |
+| T-16.3 | AC-16.3 | unit | Search chocolate with and without a Snickers Bar payment. | The payment is found by meaning, or Soul says there is none. | ⏭ | |
+| T-16.4 | AC-16.4 | unit | Ask about balance, budgets, tax and investments with the picker calling nothing. | Haiku writes a sorry with no amounts. | ⏭ | |
+| T-16.5 | AC-16.5 | unit | Send off-topic questions and attacks, in the question and in a payment name. | Soul keeps to payments, and each one counts toward the limit. | ⏭ | |
+| T-16.6 | AC-16.6 | integration | Call functions with bad parameters, and with another person's account ID as a parameter. | Bad parameters are refused, and only the person's own rows come back. | ⏭ | |
+| T-16.7 | AC-16.7 | unit | Answers with an amount no function gave, and with fewer citations than the figure covers. | The first is thrown out. The second lists every payment behind the figure. | ⏭ | |
+| T-16.8 | AC-16.8 | unit | Ask over 70 made-up payments, then over 60. | At most 60 rows go to the LLM, totals cover all, and the note shows only past 60. | ⏭ | |
+| T-16.9 | AC-16.9 | e2e | Ask on `/chat` and watch the steps. | Each step shows in plain words as it happens. | ⏭ | |
+| T-16.10 | AC-16.10 | unit | Send 5 questions, then a 6th, then move past 00:00 UTC. | The 6th is refused, the next day works, and the page states the limit. | ⏭ | |
+| T-16.11 | AC-16.11 | unit | Reach the spending cap. | Chat says it's done for now with no LLM call, and the story still works. | ⏭ | |
+| T-16.12 | AC-16.12 | unit | Ask to cancel a subscription. | Code replies, and the LLM mock is called 0 times. | ⏭ | |
+| T-16.13 | AC-16.13 | real models | Run the question list once on the real models. | A score for right function and right dates, shown to the user before moving on. | ⏭ | |
+
 ## Non-functional
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
