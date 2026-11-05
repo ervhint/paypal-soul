@@ -47,8 +47,11 @@ export function habitSureness(days: number, daily: boolean): Sureness | null {
 
 const SUBSCRIPTION = "T0002";
 
-/** Payments with the same name seen on 2 or more days, most days first. A payment Soul can't identify never repeats. */
-export function repeats(pays: StoryPayment[]): Repeat[] {
+/**
+ * Payments with the same name seen on 2 or more days, most days first. A payment Soul can't identify never
+ * repeats. `stopped` leaves out repeats whose habit the person told Soul to stop using (U6).
+ */
+export function repeats(pays: StoryPayment[], stopped: string[] = []): Repeat[] {
   const groups = new Map<string, StoryPayment[]>();
   for (const p of pays) {
     if (p.amount <= 0 || paymentName(p) === UNKNOWN_PAYMENT) continue;
@@ -58,7 +61,7 @@ export function repeats(pays: StoryPayment[]): Repeat[] {
   const out: Repeat[] = [];
   for (const [key, ps] of groups) {
     const days = [...new Set(ps.map((p) => dayOf(p.occurred_at)))].sort();
-    if (days.length < 2) continue;
+    if (days.length < 2 || stopped.includes(key)) continue;
     const everyDay = days.every((d, i) => i === 0 || +new Date(d) - +new Date(days[i - 1]) === DAY);
     const daily = everyDay && ps.every((p) => p.event_code === SUBSCRIPTION);
     out.push({

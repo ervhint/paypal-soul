@@ -79,9 +79,9 @@ Latest run: 2026-11-04, U8: T-8.1 to T-8.5 ✅. Before that, U1: T-1.1 to T-1.5 
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| T-6.1 | AC-6.1 | e2e | Open `/memory`. | Each belief shows its text, how sure, its source and payment chips. | ⏭ | |
-| T-6.2 | AC-6.2 | e2e | On `/memory`, edit a belief and save. Open `/story`. | The edit is saved as a correction. The story uses the new text. | ⏭ | |
-| T-6.3 | AC-6.3 | integration | Click Stop Using This on a belief. Rebuild the story and ask a chat question about it. | Neither the story nor the chat uses that belief. | ⏭ | |
+| T-6.1 | AC-6.1 | e2e | Open `/memory`. | Each belief shows its text, how sure, its source and payment chips. | ✅ | Chrome on localhost 2026-11-05: three real beliefs each show text, how sure, source and payment chips. `tests/memory.test.ts` on Staging |
+| T-6.2 | AC-6.2 | e2e | On `/memory`, edit a belief and save. Open `/story`. | The edit is saved as a correction. The story uses the new text. | ✅ | Chrome on localhost 2026-11-05, real LLM: edited Bus fare to "The bus fare is my daily ride to work."; saved word for word as You Told Me, Nov 5, the sentence rewrote with it and shows in Here's What Changed. `tests/memory.test.ts`: saved as a correction, holds after a rebuild |
+| T-6.3 | AC-6.3 | integration | Click Stop Using This on a belief. Rebuild the story and ask a chat question about it. | Neither the story nor the chat uses that belief. | ✅ | `tests/memory.test.ts` on Staging: told belief and habit stopped, rebuild and chat don't get them, Use Again restores. Chrome 2026-11-05, real LLM: coffee stopped, chat wouldn't call it a habit; mum support stopped, Spent on You $81.00 → $127.20, suggestion gone; both restored, $81.00 |
 
 ## Phase D: Ask
 

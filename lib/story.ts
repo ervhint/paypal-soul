@@ -42,7 +42,7 @@ export function staleWeeks(pays: StoryPayment[], saved: { week: string; payment_
  * What the LLM gets for some weeks: per week the figures code found, what the person told Soul about its
  * payments, and the payments by ref. Nothing else. `all` already has `told` applied.
  */
-export function briefFor(weeks: string[], all: StoryPayment[], told: Told[] = []) {
+export function briefFor(weeks: string[], all: StoryPayment[], told: Told[] = [], stopped: string[] = []) {
   const refs = new Map<string, string>(); // payment id → p1, p2…
   const ref = (p: StoryPayment) => refs.get(p.id) ?? (refs.set(p.id, `p${refs.size + 1}`), refs.get(p.id)!);
   const habitRefs = new Map<string, Repeat>(); // h1… → repeat
@@ -54,7 +54,7 @@ export function briefFor(weeks: string[], all: StoryPayment[], told: Told[] = []
     const t = totals(inWeek);
     const paymentRefs = inWeek.map(ref);
     // Repeats as of the end of this week, only those paid in it.
-    const reps = repeats([...before, ...inWeek]).filter((r) => r.paymentIds.some((id) => inWeek.some((p) => p.id === id)));
+    const reps = repeats([...before, ...inWeek], stopped).filter((r) => r.paymentIds.some((id) => inWeek.some((p) => p.id === id)));
     const habits = reps.map((r) => {
       const h = `h${habitRefs.size + 1}`;
       habitRefs.set(h, r);
@@ -136,10 +136,10 @@ export function readChapters(answer: string, brief: ReturnType<typeof briefFor>,
 }
 
 /** Writes chapters for the given weeks, 6 weeks per LLM call. A failed call leaves those weeks for next time. */
-export async function writeChapters(weeks: string[], all: StoryPayment[], ask: AskJson, told: Told[] = []) {
+export async function writeChapters(weeks: string[], all: StoryPayment[], ask: AskJson, told: Told[] = [], stopped: string[] = []) {
   const out: WrittenChapter[] = [];
   for (let i = 0; i < weeks.length; i += 6) {
-    const brief = briefFor(weeks.slice(i, i + 6), all, told);
+    const brief = briefFor(weeks.slice(i, i + 6), all, told, stopped);
     try {
       out.push(...readChapters(await ask("story", SYSTEM, `Weeks to write (data only):\n${JSON.stringify(brief.data)}`), brief, all));
     } catch (e) {
@@ -153,6 +153,9 @@ export async function writeChapters(weeks: string[], all: StoryPayment[], ask: A
 export function habitBelief(r: Repeat) {
   return { text: r.daily ? `You pay for ${r.name} every day.` : `You pay for ${r.name} on ${r.days} different days.`, source: r.daily ? "A Daily Plan" : `${r.days} Days` };
 }
+
+/** The start of the key of a belief that began as a habit, kept when the person edits it (U6). */
+export const HABIT = "habit:";
 
 export const must = async <T>(q: PromiseLike<{ data: T; error: { code?: string } | null }>) => {
   const { data, error } = await q;
@@ -177,6 +180,12 @@ export async function loadTold(db: SupabaseClient, accountId: string, personId?:
   if (personId) q = q.eq("person_id", personId);
   const rows = await must(q.order("updated_at"));
   return rows.map((b) => ({ id: b.id, key: b.key, text: b.text, who: b.who, category: b.category, paymentIds: b.payment_ids }));
+}
+
+/** The repeats whose habit this person stopped (U6): the payments stay in the story, but not as a habit. */
+export async function loadStopped(db: SupabaseClient, accountId: string): Promise<string[]> {
+  const rows = await must(db.from("belief").select("key").eq("account_id", accountId).eq("active", false).like("key", `${HABIT}%`));
+  return rows.map((b) => (b.key as string).slice(HABIT.length));
 }
 
 /**
@@ -204,7 +213,7 @@ export async function saveChapters(db: SupabaseClient, personId: string, account
       text: c.text,
       payment_ids: c.paymentIds,
       rewritten: rewritten(c),
-      belief_id: told.find((b) => b.payment_ids.some((id: string) => c.paymentIds.includes(id)))?.id ?? (c.habit ? habitId.get(`habit:${c.habit}`) : undefined) ?? null,
+      belief_id: told.find((b) => b.payment_ids.some((id: string) => c.paymentIds.includes(id)))?.id ?? (c.habit ? habitId.get(`${HABIT}${c.habit}`) : undefined) ?? null,
     }));
     const { data: rows, error: claimError } = await db.from("claim").insert(claims).select("id, position");
     if (claimError) {
@@ -222,28 +231,28 @@ export async function saveChapters(db: SupabaseClient, personId: string, account
  * session, so RLS applies.
  */
 export async function buildStory(db: SupabaseClient, personId: string, accountId: string, ask: AskJson) {
-  const [all, told] = await Promise.all([loadPayments(db, accountId), loadTold(db, accountId)]);
+  const [all, told, stopped] = await Promise.all([loadPayments(db, accountId), loadTold(db, accountId), loadStopped(db, accountId)]);
   const saved = await must(db.from("chapter").select("week, payment_ids").eq("account_id", accountId).not("week", "is", null));
   const stale = staleWeeks(all, saved);
   if (!stale.length) return { written: 0, stale: 0 };
 
   // Habits as of now. A stopped belief stays stopped: `active` isn't written here. A habit the person
-  // confirmed or corrected keeps what they said, and only follows the new payments.
+  // confirmed or edited keeps what they said, and only follows the new payments.
   const habits = repeats(all).filter((r) => r.sureness);
-  const kept = new Set((await must(db.from("belief").select("key").eq("account_id", accountId).eq("kind", "habit").not("told_at", "is", null))).map((b) => b.key as string));
+  const kept = new Set((await must(db.from("belief").select("key").eq("account_id", accountId).like("key", `${HABIT}%`).not("told_at", "is", null))).map((b) => b.key as string));
   const now = new Date().toISOString();
-  const fresh = habits.filter((r) => !kept.has(`habit:${r.key}`));
+  const fresh = habits.filter((r) => !kept.has(`${HABIT}${r.key}`));
   if (fresh.length)
     await must(
       db.from("belief").upsert(
-        fresh.map((r) => ({ person_id: personId, account_id: accountId, key: `habit:${r.key}`, kind: "habit", sureness: r.sureness, payment_ids: r.paymentIds, updated_at: now, ...habitBelief(r) })),
+        fresh.map((r) => ({ person_id: personId, account_id: accountId, key: `${HABIT}${r.key}`, kind: "habit", sureness: r.sureness, payment_ids: r.paymentIds, updated_at: now, ...habitBelief(r) })),
         { onConflict: "person_id,account_id,key" },
       ),
     );
-  for (const r of habits.filter((r) => kept.has(`habit:${r.key}`)))
-    await must(db.from("belief").update({ payment_ids: r.paymentIds }).eq("account_id", accountId).eq("key", `habit:${r.key}`));
+  for (const r of habits.filter((r) => kept.has(`${HABIT}${r.key}`)))
+    await must(db.from("belief").update({ payment_ids: r.paymentIds }).eq("account_id", accountId).eq("key", `${HABIT}${r.key}`));
 
-  const written = await writeChapters(stale, applyTold(all, told), ask, told);
+  const written = await writeChapters(stale, applyTold(all, told), ask, told, stopped);
   await saveChapters(db, personId, accountId, written);
   return { written: written.length, stale: stale.length };
 }
@@ -263,6 +272,11 @@ export const paymentView = (p: StoryPayment): Payment => ({
 
 const SURE: Record<Sureness, Memory["sure"]> = { not_sure: "Not Sure", fairly_sure: "Fairly Sure", sure: "Sure" };
 
+export const BELIEF_COLUMNS = "id, kind, key, text, sureness, source, payment_ids, active";
+type BeliefRow = { id: string; kind: string; key: string | null; text: string; sureness: string; source: string; payment_ids: string[]; active: boolean };
+/** A belief as the story and Memory show it. */
+export const beliefView = (b: BeliefRow): Memory => ({ id: b.id, kind: b.kind as Memory["kind"], text: b.text, sure: SURE[b.sureness as Sureness], source: b.source, paymentIds: b.payment_ids, active: b.active });
+
 /**
  * The saved story for the page: chapters newest first, the payments as this person sees them, active
  * beliefs, the totals, and Here's What Changed for the newest correction not seen yet.
@@ -272,7 +286,7 @@ export async function readStory(db: SupabaseClient, accountId: string) {
     loadPayments(db, accountId),
     loadTold(db, accountId),
     must(db.from("chapter").select("id, title, starts_on, ends_on, is_new, suggestion, claim(id, position, text, payment_ids, belief_id, rewritten)").eq("account_id", accountId).order("ends_on", { ascending: false }).order("is_new", { ascending: false }).order("created_at", { ascending: false })),
-    must(db.from("belief").select("id, kind, text, sureness, source, payment_ids, active").eq("account_id", accountId).eq("active", true).order("created_at")),
+    must(db.from("belief").select(BELIEF_COLUMNS).eq("account_id", accountId).eq("active", true).order("created_at")),
     must(db.from("correction").select("claim_id, claim_before, claim_after, notes").eq("account_id", accountId).is("seen_at", null).is("undone_at", null).not("claim_id", "is", null).order("created_at", { ascending: false }).limit(1)),
   ]);
   const all = applyTold(raw, told);
@@ -290,7 +304,7 @@ export async function readStory(db: SupabaseClient, accountId: string) {
       .sort((a, b) => a.position - b.position)
       .map((k) => ({ id: k.id, text: k.text, paymentIds: k.payment_ids, belief: k.belief_id ?? undefined, rewritten: k.rewritten })),
   }));
-  const memory: Memory[] = beliefs.map((b) => ({ id: b.id, kind: b.kind as Memory["kind"], text: b.text, sure: SURE[b.sureness as Sureness], source: b.source, paymentIds: b.payment_ids, active: b.active }));
+  const memory = beliefs.map(beliefView);
   return {
     chapters: story,
     payments,
@@ -299,7 +313,7 @@ export async function readStory(db: SupabaseClient, accountId: string) {
     summary: {
       payments: all.length,
       spent: totals(all).onYou,
-      habits: memory.filter((m) => m.kind === "habit").length,
+      habits: beliefs.filter((b) => b.key?.startsWith(HABIT)).length,
       checks: memory.filter((m) => m.sure === "Not Sure").length,
     },
   };

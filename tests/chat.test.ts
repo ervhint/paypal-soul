@@ -70,6 +70,7 @@ function memoryStore(pays = all, start: Turn[] = []) {
     askedSince: async (iso) => turns.filter((t) => t.role === "user" && t.at >= iso).length,
     payments: async () => pays,
     beliefs: async () => beliefs,
+    stopped: async () => [],
     save: async (q, a, at) => {
       turns.push({ role: "user", text: q, paymentIds: [], at: at.toISOString() }, { role: "soul", ...a, at: new Date(+at + 1).toISOString() });
     },

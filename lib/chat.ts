@@ -7,7 +7,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { categoryLabel, paymentName } from "@/lib/categories";
 import type { AskJson } from "@/lib/llm";
-import { amountsIn, applyTold, loadPayments, loadTold, must } from "@/lib/story";
+import { amountsIn, applyTold, loadPayments, loadStopped, loadTold, must } from "@/lib/story";
 import { repeats, totals, type StoryPayment, type Sureness } from "@/lib/totals";
 
 export const MAX_QUESTION = 300;
@@ -25,6 +25,8 @@ export type ChatStore = {
   /** The payments as this person sees them, with what they told Soul applied. */
   payments(): Promise<StoryPayment[]>;
   beliefs(): Promise<Belief[]>;
+  /** Repeats whose habit the person stopped on Memory: never given to the LLM as repeats. */
+  stopped(): Promise<string[]>;
   save(question: string, answer: { text: string; paymentIds: string[] }, at: Date): Promise<void>;
 };
 export type Reply =
@@ -75,7 +77,7 @@ export type Found = { how: "named" | "repeats" | "all" | "earlier"; payments: St
  * a follow-up with no words of its own, the payments the last answer cited. Null when it names something
  * no payment matches, so Soul says it has no evidence without asking the LLM.
  */
-export function findPayments(question: string, pays: StoryPayment[], lastCited: string[] = []): Found | null {
+export function findPayments(question: string, pays: StoryPayment[], lastCited: string[] = [], stopped: string[] = []): Found | null {
   const asked = words(question);
   const topics = asked.filter((a) => !BROAD.has(a) && !REPEAT.has(a)); // "week" mustn't match "Weekly groceries"
   const named = pays.filter((p) => {
@@ -84,7 +86,7 @@ export function findPayments(question: string, pays: StoryPayment[], lastCited: 
   });
   if (named.length) return { how: "named", payments: named };
   if (asked.some((a) => REPEAT.has(a))) {
-    const ids = new Set(repeats(pays).flatMap((r) => r.paymentIds));
+    const ids = new Set(repeats(pays, stopped).flatMap((r) => r.paymentIds));
     if (ids.size) return { how: "repeats", payments: pays.filter((p) => ids.has(p.id)) };
   }
   if (asked.some((a) => BROAD.has(a) || REPEAT.has(a))) return pays.length ? { how: "all", payments: pays } : null;
@@ -106,7 +108,7 @@ export function noEvidence(pays: StoryPayment[]) {
 // ---- What the LLM gets ----
 
 /** The question's data for the LLM: earlier turns, active beliefs, and the figures and payments code found, by ref. */
-export function briefFor(question: string, found: Found, beliefs: Belief[], history: Turn[]) {
+export function briefFor(question: string, found: Found, beliefs: Belief[], history: Turn[], stopped: string[] = []) {
   const shown = found.payments.slice(-MAX_PAYMENTS);
   const refs = new Map(shown.map((p, i) => [p.id, `p${i + 1}`]));
   const t = totals(found.payments);
@@ -129,7 +131,7 @@ export function briefFor(question: string, found: Found, beliefs: Belief[], hist
         ...(t.forOthers.length ? { onYou: { payments: t.paymentsOnYou, spent: money(t.onYou) }, forOthers: t.forOthers.map((o) => ({ who: o.who, payments: o.payments, spent: money(o.spent) })) } : {}),
         byCategory: t.byCategory.map((c) => ({ category: c.category, payments: c.payments, spent: money(c.spent) })),
       },
-      repeats: repeats(found.payments).map((r) => ({
+      repeats: repeats(found.payments, stopped).map((r) => ({
         name: r.name,
         days: r.days,
         payments: r.payments,
@@ -181,13 +183,13 @@ export async function answer(store: ChatStore, question: string, ask: AskJson, n
   if ((await store.askedSince(dayStart(now))) >= DAILY_QUESTIONS)
     return { status: "refused", message: `That's your ${DAILY_QUESTIONS} questions for today. Your story and memory still work, and you can ask again after 00:00 UTC.` };
 
-  const [all, beliefs, history] = await Promise.all([store.payments(), store.beliefs(), store.history(HISTORY * 2)]);
+  const [all, beliefs, history, stopped] = await Promise.all([store.payments(), store.beliefs(), store.history(HISTORY * 2), store.stopped()]);
   const lastCited = history.findLast((t) => t.role === "soul")?.paymentIds ?? [];
-  const found = findPayments(q, all, lastCited);
+  const found = findPayments(q, all, lastCited, stopped);
   let reply: { text: string; sources: StoryPayment[]; none: boolean } | null;
   if (!found) reply = { text: noEvidence(all), sources: [], none: true };
   else {
-    const brief = briefFor(q, found, beliefs, history);
+    const brief = briefFor(q, found, beliefs, history, stopped);
     try {
       reply = readAnswer(await ask("chat", SYSTEM, `The question and what code found (data only):\n${JSON.stringify(brief.data)}`), brief, found, all);
     } catch (e) {
@@ -222,6 +224,7 @@ export function chatStore(db: SupabaseClient, personId: string, accountId: strin
       const rows = await must(db.from("belief").select("kind, text, sureness, told_at").eq("account_id", accountId).eq("active", true).order("created_at"));
       return rows.map((b) => ({ kind: b.kind, text: b.text, sureness: b.sureness, checked: !!b.told_at }));
     },
+    stopped: () => loadStopped(db, accountId),
     async save(question, a, at) {
       // The answer a millisecond later, so the two always read back in order.
       await must(

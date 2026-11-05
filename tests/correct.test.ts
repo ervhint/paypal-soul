@@ -30,9 +30,9 @@ describe("reading a correction", () => {
   const refs = new Map([["p1", "a"], ["p2", "b"]]);
   it("keeps the sentence's payments, a real person and a listed category", () => {
     const r = readReading(JSON.stringify({ forSomeone: true, who: "your mum", category: "not.a.category", payments: ["p2", "p9"], belief: "You buy groceries for your mum." }), refs);
-    expect(r).toEqual({ who: "your mum", needsWho: false, category: null, paymentIds: ["b"], belief: "You buy groceries for your mum." });
+    expect(r).toEqual({ who: "your mum", forSelf: false, needsWho: false, category: null, paymentIds: ["b"], belief: "You buy groceries for your mum." });
     const all2 = readReading(JSON.stringify({ forSomeone: false, who: "Sam", category: "gift_charity.gift", payments: [], belief: "It cost $5." }), refs);
-    expect(all2).toEqual({ who: null, needsWho: false, category: "gift_charity.gift", paymentIds: ["a", "b"], belief: null });
+    expect(all2).toEqual({ who: null, forSelf: false, needsWho: false, category: "gift_charity.gift", paymentIds: ["a", "b"], belief: null });
   });
 
   it("needs a person when the payments were for someone and nobody is named (AC-5.3)", () => {
