@@ -97,60 +97,39 @@ export async function createPurchase(admin: SupabaseClient, personId: string, ac
   }
 }
 
-/** A PostgREST filter for beliefs that aren't one-offs (U17): a one-off never gives a send money suggestion. */
-export const NOT_ONE_OFF = "key.is.null,key.not.like.oneoff:*";
+/** An account typed for someone (U21), saved so their next send picks it by itself. */
+export type SendAccount = { who: string; email: string };
 
-/** A support belief (U5) send money can start from: who the payments were for, and which payments. */
-export type Support = { id: string; who: string; paymentIds: string[] };
-
-/** The person's active support belief with that ID, read with their session (RLS). */
-export async function loadSupport(db: SupabaseClient, accountId: string, beliefId: string): Promise<Support | null> {
-  const { data, error } = await db.from("belief").select("id, who, payment_ids").eq("id", beliefId).eq("account_id", accountId).eq("kind", "support").eq("active", true).or(NOT_ONE_OFF).maybeSingle();
-  if (error) throw error;
-  return data?.who ? { id: data.id, who: data.who, paymentIds: data.payment_ids } : null;
+/** The accounts this person saved, newest first, read with their session (RLS). */
+export async function loadAccounts(db: SupabaseClient, accountId: string): Promise<SendAccount[]> {
+  const rows = await must(db.from("send_account").select("who, email").eq("account_id", accountId).order("updated_at", { ascending: false }));
+  return rows.map((r) => ({ who: r.who as string, email: r.email as string }));
 }
 
-/** "Weekly groceries", or "Weekly groceries and Mobile data": the names of a support belief's payments. */
-export const supportNames = (names: string[]) => {
-  const u = [...new Set(names)];
-  return u.length > 1 ? `${u.slice(0, -1).join(", ")} and ${u.at(-1)}` : (u[0] ?? "those payments");
-};
-
-/** Why Soul suggests a send, from what the person told it. */
-export const sendReason = (who: string, names: string[]) =>
-  `You told me ${supportNames(names)} ${new Set(names).size > 1 || /s$/i.test(names[0] ?? "") ? "are" : "is"} for ${who}.`;
-
-type SuggestChapter = { id: string; claims: { paymentIds: string[] }[]; suggest?: { text: string; label: string; href: string } };
-
-/**
- * Puts a send money suggestion under the newest chapter that tells of each support belief's payments
- * (AC-9.1). It stays after a send, so the person can send again (U18); chapters come newest first.
- */
-export function suggestSends<C extends SuggestChapter>(chapters: C[], support: Support[], names: (ids: string[]) => string[]): C[] {
-  const out = chapters.map((c) => ({ ...c }));
-  for (const b of support) {
-    const ch = out.find((c) => !c.suggest && c.claims.some((k) => k.paymentIds.some((id) => b.paymentIds.includes(id))));
-    if (!ch) continue;
-    ch.suggest = { text: `${sendReason(b.who, names(b.paymentIds))} Want to send ${b.who} some money towards the next one?`, label: "Review the Payment", href: `/action/confirm?belief=${b.id}` };
-  }
-  return out;
+/** Saves the account typed for `who`, replacing the one they had. One per person, whatever the capitals. */
+export async function saveAccount(db: SupabaseClient, personId: string, accountId: string, who: string, email: string) {
+  const now = new Date().toISOString();
+  // `who` passed `person` in lib/correct.ts: letters, spaces, ' . and -, so no % or _ to escape for ilike.
+  const had = await must(db.from("send_account").select("id").eq("account_id", accountId).ilike("who", who).limit(1));
+  if (had.length) await must(db.from("send_account").update({ email, who, updated_at: now }).eq("id", had[0].id));
+  else await must(db.from("send_account").insert({ person_id: personId, account_id: accountId, who, email, updated_at: now }));
 }
 
 /**
- * Send money: makes the sandbox order paying `payeeEmail`, the account standing in for the belief's
- * person, and returns the waiting action. The same send still waiting is handed back instead.
+ * Send money from Chat (U21): makes the sandbox order paying `payeeEmail`, the account standing in for
+ * `who`, and returns the waiting action. The same send still waiting is handed back instead.
  */
-export async function createSend(admin: SupabaseClient, personId: string, accountId: string, belief: Support, names: string[], payeeEmail: string, origin: string, orders: Orders, amount: string = SEND.amount) {
+export async function createSend(admin: SupabaseClient, personId: string, accountId: string, who: string, payeeEmail: string, origin: string, orders: Orders, amount: string = SEND.amount) {
   const open = await must(
-    admin.from("action").select(ACTION_COLUMNS).eq("person_id", personId).eq("account_id", accountId).eq("kind", "send").eq("status", "waiting").eq("belief_id", belief.id).eq("payee_email", payeeEmail).eq("amount", amount).not("paypal_order_id", "is", null).limit(1),
+    admin.from("action").select(ACTION_COLUMNS).eq("person_id", personId).eq("account_id", accountId).eq("kind", "send").eq("status", "waiting").eq("recipient", who).eq("payee_email", payeeEmail).eq("amount", amount).not("paypal_order_id", "is", null).limit(1),
   );
   if (open.length) return open[0] as ActionRow;
   const a = (await must(
-    admin.from("action").insert({ person_id: personId, account_id: accountId, kind: "send", recipient: belief.who, amount, currency: SEND.currency, belief_id: belief.id, payee_email: payeeEmail }).select(ACTION_COLUMNS).single(),
+    admin.from("action").insert({ person_id: personId, account_id: accountId, kind: "send", recipient: who, amount, currency: SEND.currency, payee_email: payeeEmail }).select(ACTION_COLUMNS).single(),
   )) as ActionRow;
   const back = `${origin}/action/status?id=${a.id}`;
   try {
-    const name = `Towards ${supportNames(names)}`.slice(0, 120);
+    const name = `Money for ${who}`.slice(0, 120);
     const order = await orders.create({ requestId: a.id, amount, currency: SEND.currency, name, customId: a.id, returnUrl: back, cancelUrl: `${back}&cancelled=1`, payeeEmail });
     return (await must(admin.from("action").update({ paypal_order_id: order.id, updated_at: new Date().toISOString() }).eq("id", a.id).select(ACTION_COLUMNS).single())) as ActionRow;
   } catch (e) {

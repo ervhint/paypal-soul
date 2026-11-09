@@ -10,6 +10,7 @@ import { CATEGORY_LINES, categoryLabel, paymentName, UNKNOWN_PAYMENT } from "@/l
 import { beliefView, checkArgs, MAX_ROWS, runFunction, stepOf, TOOLS, type ChatBelief, type Figure, type Ledger, type Result } from "@/lib/chat-functions";
 import type { AskJson, AskTools } from "@/lib/llm";
 import { amountsIn, applyTold, clip, loadPayments, loadStopped, loadTold, money, must, short } from "@/lib/story";
+import { asksToSend, SEND_ON_MEMORY } from "@/lib/send";
 import type { StoryPayment } from "@/lib/totals";
 
 export const MAX_QUESTION = 300;
@@ -254,6 +255,8 @@ export async function answer(store: ChatStore, question: string, llm: Llm, now =
   const q = clip(question, MAX_QUESTION + 1);
   if (!q) return { status: "refused", message: "Ask me something about your payments first." };
   if (q.length > MAX_QUESTION) return { status: "refused", message: `Keep your question under ${MAX_QUESTION} characters, and I'll answer it.` };
+  // Sending money lives on Memory (U21): code's line, with no LLM call, not saved and not counted.
+  if (asksToSend(q)) return { status: "refused", message: SEND_ON_MEMORY };
   if ((await store.askedSince(dayStart(now))) >= DAILY_QUESTIONS)
     return { status: "refused", message: `That's your ${DAILY_QUESTIONS} questions for today. Your story and memory still work, and you can ask again after 00:00 UTC.` };
 

@@ -598,8 +598,34 @@ Acceptance:
 - AC-20.5 Given the question list (20 statements, 20 questions, 10 attacks), when it runs on the real picker once, then the score shows how often a card appears exactly when it should. About $0.20, shown to the user before moving on.
 Tests: T-20.1 (unit), T-20.2 (e2e), T-20.3 (e2e), T-20.4 (unit), T-20.5 (real models, once)
 
+#### U21 — Send money from Memory  (Must · agreed Nov 9, replaces where U9's send starts)
+Covers: US-19, US-20, US-21      Screens: S-06 Send Money on a person (replaces S-08 and the S-02 suggestion), S-13, S-09, S-09a      Depends on: U6, U9, U18      Est: 2h
+
+Why: the user, Nov 9. The story is for reading and correcting, and Chat is for questions about payments, so neither is the place to send money. A page of its own would make Soul look like a second PayPal. And the old suggestion ("Want to send your mum some money towards the next one?") claimed a reason Soul doesn't have. Soul only knows someone matters to you because you told it. So the honest place is Memory: next to each person Soul knows about, a plain Send Money button, with no story about why.
+
+How:
+1. A person on Memory is someone you told Soul a payment was for (an active support belief with `who`, not a one-off), or someone you already sent money to through Soul. Each person's belief gets a **Send Money to <who>** button. People you only sent to are listed under "People You've Sent Money To", each with the same button.
+2. The button opens a form under that person, with the person filled in:
+   - **How Much?**: from $1.00 to $100.00, checked on the server too (U18's `sendAmount`).
+   - **Account**: a dropdown of the account saved for this person first, Soul's Test Account, the other saved accounts (each with who it's for), and Type a New Account, which shows an email field.
+   - **Get the PayPal Link**: makes the order as U9 does, then the status page. Nothing moves until the person approves on PayPal with their own sandbox login.
+3. The person's latest send shows under them: "Sent $30.00 on Nov 9" or "Waiting on PayPal" with a link to the payment. They can always send again.
+4. An account typed for someone is saved for that person (table `send_account`: person, data source, who, email, unique per who), so next time it's picked by itself. It's kept for this visitor only (RLS) and goes with Delete My Data. Soul's Test Account is never saved.
+5. The send needs no support belief behind it: the action keeps who it was for, and the captured payment is saved for that person (`for_who`), so it's never spending on you, joins its own New chapter, and counts for that person in U18's unusual rule.
+6. The story stops suggesting sends: `suggestSends` and the confirm page go. "Try Again" after a failed send goes back to Memory.
+7. Chat stays questions only. A message asking to send money ("send $30 to Anna") gets code's line, "I only answer questions about your payments. To send money, tap Send Money next to the person on Memory.", with no LLM call. It isn't saved and doesn't count toward the 5 questions. Asking about past sends ("how much did I send mum?") stays a normal question.
+
+Acceptance:
+- AC-21.1 Given a support belief for your mum, when Memory opens, then it shows Send Money to Your Mum, and the form has the person filled in, How Much? and the Account dropdown. A one-off or a belief about a thing has no button.
+- AC-21.2 Given "send $30 to Anna" in Chat, when it's sent, then Soul's line points to Memory, with no LLM call, and the questions left don't change. A question about past sends is a normal answer.
+- AC-21.3 Given the form, when the person types a new account for Anna and gets the PayPal link, then the account is saved for Anna and comes first in the dropdown next time; Soul's Test Account isn't saved.
+- AC-21.4 Given an amount outside $1.00 to $100.00, when Get the PayPal Link is tapped, then the form says so and no order is made (checked on the server too).
+- AC-21.5 Given an approved send to Anna, when the story and Memory open, then a New chapter shows it, Spent on You doesn't change, and Anna is listed under People You've Sent Money To with "Sent $30.00".
+- AC-21.6 Given the story, when it opens, then no chapter suggests sending money.
+Tests: T-21.1 (unit), T-21.2 (unit), T-21.3 (integration), T-21.4 (unit), T-21.5 (e2e), T-21.6 (e2e)
+
 ### Build order and time
-U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U15 if time allows (U14 cut), then U16, agreed Nov 5, before the user's sandbox test. Then, agreed Nov 9: U17 → U18 (Musts), then U19 → U20 (nice to have), each in its own chat, about 12.5h in all, before P7.
+U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U15 if time allows (U14 cut), then U16, agreed Nov 5, before the user's sandbox test. Then, agreed Nov 9: U17 → U18 (Musts), then U19 → U20 (nice to have), each in its own chat, about 12.5h in all, before P7.  U21 (send money from Memory, Must) was agreed after U18 on Nov 9 and comes right after it, in the same chat.
 
 U6 moves after the golden path because the demo doesn't open Memory. U10 is Must but after the golden path, since the demo uses prepared data and U2 already proves the read route.
 
@@ -653,6 +679,7 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 5 | Repo stays private until about Nov 12, then goes public under the MIT license | Going public earlier gives away the plan for little gain. MIT is short, widely known and meets the open source rule |
 | Nov 9 | Four units close the gaps against the user's five requirements: U17 keep exceptions apart, U18 ask about an unusual payment (Musts), U19 tell Soul about you, U20 chat remembers what you tell it (nice to have). Each runs in its own chat, Musts first | The user wants every requirement met. A Devpost search on Nov 9 found PayPal history, auto-categories and grounded chat in several entries (FinSight AI, Little Wallet, Stella), but no story you correct, so revising and noticing are what set Soul apart |
 | Nov 9 | Send money asks how much, $1.00 to $100.00, checked on the server, and the suggestion stays after a send, for everyone. Replaces U9's fixed $25.00 sent once | The user: a send screen asks how much. The person approves every send on PayPal with their own sandbox login, so no shared money is at risk. It also lets U18's live test make a bigger send |
+| Nov 9 | Send money starts from Memory, next to each person Soul knows about, with no reason claimed; not from the story, Chat or a page of its own (U21) | The user: the story is for reading, Chat for questions, and a Send page would make Soul a second PayPal. Soul only knows a person matters because you told it, so it offers nothing more than the button |
 | Nov 9 | Chat may propose a memory (U20) but never saves one on its own: the person taps Remember | Functions stay read-only (AC-16.6), and a planted payment name or chat line can't change memory without the person seeing it |
 
 ## 6. Open questions

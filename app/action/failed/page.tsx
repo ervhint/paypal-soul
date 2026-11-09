@@ -2,14 +2,12 @@ import Link from "next/link";
 import { Receipt } from "@/components/ui";
 import { PURCHASE, SEND, sendAmount } from "@/lib/action";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // The order couldn't be made, or PayPal declined the capture (AC-9.5). Nothing moved either way.
-export default async function FailedPage({ searchParams }: { searchParams: Promise<{ kind?: string; belief?: string; why?: string; amount?: string }> }) {
+export default async function FailedPage({ searchParams }: { searchParams: Promise<{ kind?: string; why?: string; amount?: string }> }) {
   const q = await searchParams;
   const buy = q.kind === "buy";
   const sent = sendAmount(q.amount) ?? SEND.amount; // the amount the person picked (U18)
-  const retry = buy ? "/buy" : q.belief && UUID.test(q.belief) ? `/action/confirm?belief=${q.belief}` : "/story";
+  const retry = buy ? "/buy" : "/memory"; // a send starts on Memory (U21)
   const why = q.why === "refused" ? "PayPal didn’t accept this payment, so it wasn’t made. If you typed an email, check it’s a sandbox account." : q.why === "declined" ? "PayPal declined the payment." : "PayPal’s sandbox didn’t answer in time.";
   return (
     <div className="wrap narrow">

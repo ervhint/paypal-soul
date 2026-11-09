@@ -203,7 +203,7 @@ a { color: inherit; text-decoration: none; }
 .mem li.off .mem-text { text-decoration: line-through; }
 .mem-text { font-size: 19px; letter-spacing: -0.01em; }
 .mem-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; color: var(--muted); font-size: 13.5px; }
-.mem-actions { display: flex; gap: 8px; }
+.mem-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .mem-actions.held { visibility: hidden; }
 .mem-actions .btn.dark { box-shadow: inset 0 0 0 1px var(--line); }
 .mem form { grid-column: 1 / -1; display: grid; gap: 10px; }
@@ -363,3 +363,15 @@ a { color: inherit; text-decoration: none; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .anim, .anim-pulse, .headline span, .sheet-menu a, .sheet-menu button { opacity: 1; transform: none; filter: none; }
 }
+
+/* Send money from Memory (U21): the form under a person, and their latest send. */
+.send-card { margin-top: 14px; padding: 4px 20px 20px; background: var(--panel); border: 1px solid var(--mark); border-radius: 22px; max-width: 30em; grid-column: 1 / -1; }
+.send-card .field-label { margin-top: 16px; }
+.send-card .field { margin-top: 8px; }
+.send-card .note { margin-top: 8px; font-size: 13px; }
+.send-card select.field { appearance: none; padding-right: 40px; cursor: pointer; background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%); background-position: calc(100% - 22px) 50%, calc(100% - 16px) 50%; background-size: 6px 6px; background-repeat: no-repeat; }
+.send-card select.field option { background: #1b1b1e; color: #fff; }
+.send-last { margin-top: 8px; color: var(--soft); font-size: 13.5px; grid-column: 1 / -1; }
+.send-last .link { font-size: 13.5px; }
+.sent-to { margin-top: 40px; }
+.sent-to h2 { font-size: 18px; font-weight: 600; }

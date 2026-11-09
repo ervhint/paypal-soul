@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { interpret, MAX_SAID, movedIds, nextTold, saveCorrection, saveMoved, undoPoint, WHO_QUESTION, type Reading, type Result } from "@/lib/correct";
 import type { AskJson } from "@/lib/llm";
+import { peopleOf } from "@/lib/send";
 import { applyTold, BELIEF_COLUMNS, beliefView, clip, HABIT, isOneOff, loadPayments, loadStopped, loadTold, must, paymentView, saveChapters, short, stopKey, writeChapters, type Told } from "@/lib/story";
 import { INTEREST, weekOf, type StoryPayment } from "@/lib/totals";
 
@@ -21,14 +22,19 @@ const noticed = (key: string | null) => !!key && (key.startsWith(HABIT) || key.s
 const ownKey = (key: string | null) => noticed(key) || isOneOff({ key });
 const toTold = (b: Row): Told => ({ id: b.id, key: b.key, text: b.text, who: b.who, category: b.category, paymentIds: b.payment_ids });
 
-/** Every belief, stopped ones too, with the payments as this person sees them, for the chips. */
+/**
+ * Every belief, stopped ones too, with the payments as this person sees them, for the chips, and the people
+ * they can send money to from here (U21): those they support, and anyone they already sent money to.
+ */
 export async function readMemory(db: SupabaseClient, accountId: string) {
-  const [all, told, beliefs] = await Promise.all([
+  const [all, told, beliefs, sends] = await Promise.all([
     loadPayments(db, accountId),
     loadTold(db, accountId),
-    must(db.from("belief").select(BELIEF_COLUMNS).eq("account_id", accountId).neq("kind", "check").order("created_at")), // a Same as Usual answer isn't listed (AC-18.4)
+    must(db.from("belief").select(`${BELIEF_COLUMNS}, who`).eq("account_id", accountId).neq("kind", "check").order("created_at")), // a Same as Usual answer isn't listed (AC-18.4)
+    must(db.from("action").select("id, kind, recipient, status, amount, created_at").eq("account_id", accountId).eq("kind", "send")),
   ]);
-  return { memory: beliefs.map(beliefView), payments: applyTold(all, told).map(paymentView).reverse() };
+  const people = peopleOf(beliefs.map((b) => ({ ...b, oneOff: isOneOff(b) })), sends);
+  return { memory: beliefs.map(beliefView), payments: applyTold(all, told).map(paymentView).reverse(), people };
 }
 
 const loadBelief = async (db: SupabaseClient, accountId: string, id: string) =>

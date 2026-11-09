@@ -3,7 +3,7 @@
 // keys (the BFF side of T-8.1 to T-8.4): order, capture once, new chapter, cancelled and expired orders.
 import type { CookieMethodsServer } from "@supabase/ssr";
 import { afterAll, describe, expect, it } from "vitest";
-import { createPurchase, createSend, newBrief, plainNew, readNew, sendAmount, sendCategory, sendReason, settle, settleWaiting, suggestSends } from "@/lib/action";
+import { createPurchase, createSend, loadAccounts, newBrief, plainNew, readNew, saveAccount, sendAmount, sendCategory, settle, settleWaiting } from "@/lib/action";
 import { importAccount, leaveOutMadeInSoul, MADE_IN_SOUL, sortRows, type Sorted, type Store } from "@/lib/import";
 import type { AskJson } from "@/lib/llm";
 import { PayPalError, type NewOrder, type Orders, type PayPalOrder, type PayPalTxn } from "@/lib/paypal";
@@ -223,35 +223,15 @@ describe("purchases on Staging", () => {
   });
 });
 
-// Send money (U9). Unit: the suggestion under the support chapter, the reason, the category and the send's
-// chapter. Integration on Staging with a fake PayPal (the BFF side of T-9.1 to T-9.5).
-describe("send money suggestions (T-9.1)", () => {
-  type Ch = { id: string; claims: { paymentIds: string[] }[]; suggest?: { text: string; label: string; href: string } };
-  const ch = (id: string, ids: string[]): Ch => ({ id, claims: [{ paymentIds: ids }] });
-  const names = () => ["Weekly groceries"];
-
-  it("goes under the newest chapter with the support payments, once per belief, and stays after a send (U18)", () => {
-    const chapters = [ch("new", ["x"]), ch("week2", ["g2", "c1"]), ch("week1", ["g1"])];
-    const mum = { id: "b1", who: "your mum", paymentIds: ["g1", "g2"] };
-    const out = suggestSends(chapters, [mum], names);
-    expect(out.map((c) => c.suggest?.label ?? null)).toEqual([null, "Review the Payment", null]);
-    expect(out[1].suggest).toEqual({
-      text: "You told me Weekly groceries are for your mum. Want to send your mum some money towards the next one?",
-      label: "Review the Payment",
-      href: "/action/confirm?belief=b1",
-    });
-    expect(chapters[1]).not.toHaveProperty("suggest"); // the saved chapters aren't changed
-    expect(suggestSends(chapters, [{ ...mum, paymentIds: ["gone"] }], names).every((c) => !c.suggest)).toBe(true);
-  });
-
+// Send money (U9, from Chat since U21). Unit: the amount, the category and the send's chapter. Integration on
+// Staging with a fake PayPal (the BFF side of T-9.1 to T-9.5), and the accounts saved for people (T-21.3).
+describe("send money (T-9.1)", () => {
   it("takes the amount the person picked, from $1.00 to $100.00 with at most 2 decimals", () => {
     expect(["80", "80.5", "$37.50", " 1 ", 100, "25.00"].map(sendAmount)).toEqual(["80.00", "80.50", "37.50", "1.00", "100.00", "25.00"]);
     expect(["0.99", "100.01", "1e2", "-5", "12.345", "", "abc", null, undefined, Infinity].map(sendAmount)).toEqual(Array(10).fill(null));
   });
 
-  it("says why in the person's own terms, and files the send as support", () => {
-    expect(sendReason("Sam", ["Mobile data"])).toBe("You told me Mobile data is for Sam.");
-    expect(sendReason("your mum", ["Weekly groceries", "Bus fare", "Weekly groceries"])).toBe("You told me Weekly groceries and Bus fare are for your mum.");
+  it("files the send as money for that person", () => {
     expect(sendCategory("your mum")).toBe("family_needs.parents");
     expect(sendCategory("your Mom")).toBe("family_needs.parents");
     expect(sendCategory("Sam")).toBe("others.send_personal");
@@ -283,34 +263,26 @@ describe("send money on Staging", () => {
     return JSON.stringify({ title: "Money for Your Mum", claims: [{ text: "You sent $25.00 to your mum on Nov 5." }] });
   };
 
-  async function withSupport() {
+  async function visitor() {
     const db = browser();
     const id = await choosePrepared(db(), null);
     made.push(id);
-    const account = await preparedAccountId();
-    const { data: groceries } = await db().from("payment").select("id").eq("account_id", account).is("person_id", null).limit(2);
-    const { data: b, error } = await db()
-      .from("belief")
-      .insert({ person_id: id, account_id: account, kind: "support", key: "support:your mum", who: "your mum", text: "You buy the groceries for your mum.", sureness: "sure", source: "You Told Me", payment_ids: groceries!.map((g) => g.id), told_at: new Date().toISOString() })
-      .select("id, who, payment_ids")
-      .single();
-    if (error) throw error;
-    return { db, id, account, support: { id: b.id as string, who: b.who as string, paymentIds: b.payment_ids as string[] } };
+    return { db, id, account: await preparedAccountId() };
   }
 
-  it("pays the chosen sandbox account, captures once and joins the support and the story (T-9.2 to T-9.4)", async () => {
+  it("pays the chosen sandbox account, captures once and joins the story as money for that person (T-9.2 to T-9.4)", async () => {
     const admin = secretClient();
     const paypal = fakePayPal();
-    const { db, id, account, support } = await withSupport();
+    const { db, id, account } = await visitor();
     const before = await readStory(db(), account);
 
-    const a = await createSend(admin, id, account, support, ["Weekly groceries"], "mum@personal.example.com", "http://localhost:3000", paypal.api);
-    expect(a).toMatchObject({ kind: "send", status: "waiting", recipient: "your mum", amount: 25, belief_id: support.id, payee_email: "mum@personal.example.com" });
-    expect(paypal.made.get(a.paypal_order_id!)).toMatchObject({ amount: "25.00", payeeEmail: "mum@personal.example.com", name: "Towards Weekly groceries" });
-    expect((await createSend(admin, id, account, support, ["Weekly groceries"], "mum@personal.example.com", "http://localhost:3000", paypal.api)).id).toBe(a.id);
+    const a = await createSend(admin, id, account, "your mum", "mum@personal.example.com", "http://localhost:3000", paypal.api);
+    expect(a).toMatchObject({ kind: "send", status: "waiting", recipient: "your mum", amount: 25, belief_id: null, payee_email: "mum@personal.example.com" });
+    expect(paypal.made.get(a.paypal_order_id!)).toMatchObject({ amount: "25.00", payeeEmail: "mum@personal.example.com", name: "Money for your mum" });
+    expect((await createSend(admin, id, account, "your mum", "mum@personal.example.com", "http://localhost:3000", paypal.api)).id).toBe(a.id);
     expect(paypal.calls.create).toBe(1);
     // U18: a different amount the person picked is its own order, for that amount.
-    const big = await createSend(admin, id, account, support, ["Weekly groceries"], "mum@personal.example.com", "http://localhost:3000", paypal.api, "80.00");
+    const big = await createSend(admin, id, account, "your mum", "mum@personal.example.com", "http://localhost:3000", paypal.api, "80.00");
     expect(big.id).not.toBe(a.id);
     expect(paypal.made.get(big.paypal_order_id!)).toMatchObject({ amount: "80.00" });
     await admin.from("action").update({ status: "cancelled" }).eq("id", big.id); // the rest of this test settles the $25.00 one
@@ -323,11 +295,9 @@ describe("send money on Staging", () => {
 
     const { data: pays } = await admin.from("payment").select("id, person_id, amount, name, payee, category").eq("paypal_txn_id", done.paypal_txn_id!);
     expect(pays).toEqual([{ id: expect.any(String), person_id: id, amount: 25, name: "Sent to your mum", payee: "mum@personal.example.com", category: "family_needs.parents" }]);
-    // Money for mum, kept apart from the support belief so the groceries' category doesn't carry over.
+    // Money for mum, with no support belief needed (U21).
     const { data: sent } = await admin.from("payment").select("for_who").eq("id", pays![0].id).single();
     expect(sent!.for_who).toBe("your mum");
-    const { data: belief } = await db().from("belief").select("payment_ids").eq("id", support.id).single();
-    expect(belief!.payment_ids).toEqual(support.paymentIds);
 
     const story = await readStory(db(), account);
     expect(story.chapters[0]).toMatchObject({ title: "Money for Your Mum", fresh: true, claims: [{ paymentIds: [pays![0].id] }] });
@@ -338,11 +308,11 @@ describe("send money on Staging", () => {
   it("marks the send failed when PayPal won't make the order, with nothing in the story (T-9.5)", async () => {
     const admin = secretClient();
     const paypal = fakePayPal();
-    const { db, id, account, support } = await withSupport();
+    const { db, id, account } = await visitor();
     const refusing: Orders = { ...paypal.api, create: async () => Promise.reject(new Error("PAYEE_ACCOUNT_INVALID")) };
-    await expect(createSend(admin, id, account, support, ["Weekly groceries"], "nobody@example.com", "http://localhost:3000", refusing)).rejects.toThrow();
+    await expect(createSend(admin, id, account, "your mum", "nobody@example.com", "http://localhost:3000", refusing)).rejects.toThrow();
     // PayPal makes the order for an unknown email, then refuses the capture: failed, not left waiting.
-    const a = await createSend(admin, id, account, support, ["Weekly groceries"], "nobody@example.com", "http://localhost:3000", paypal.api);
+    const a = await createSend(admin, id, account, "your mum", "nobody@example.com", "http://localhost:3000", paypal.api);
     paypal.approve(a.paypal_order_id!);
     const refused: Orders = { ...paypal.api, capture: async () => Promise.reject(new PayPalError(422, "PayPal capture returned 422 PAYEE_ACCOUNT_INVALID")) };
     expect((await settle(admin, a, refused, sendAsk)).status).toBe("failed");
@@ -350,5 +320,20 @@ describe("send money on Staging", () => {
     expect(actions).toEqual([{ kind: "send", status: "failed" }, { kind: "send", status: "failed" }]);
     const { data: mine } = await admin.from("payment").select("id").eq("person_id", id);
     expect(mine).toEqual([]);
+  });
+
+  it("saves a typed account for that person, one per person whatever the capitals (T-21.3)", async () => {
+    const { db, id, account } = await visitor();
+    await saveAccount(db(), id, account, "Anna Bestie", "anna@personal.example.com");
+    await saveAccount(db(), id, account, "your mum", "mum@personal.example.com");
+    await saveAccount(db(), id, account, "anna bestie", "anna2@personal.example.com");
+    expect(await loadAccounts(db(), account)).toEqual([
+      { who: "anna bestie", email: "anna2@personal.example.com" },
+      { who: "your mum", email: "mum@personal.example.com" },
+    ]);
+    // Another visitor sees none of them (RLS).
+    const other = browser();
+    made.push(await choosePrepared(other(), null));
+    expect(await loadAccounts(other(), account)).toEqual([]);
   });
 });

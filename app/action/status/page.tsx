@@ -19,7 +19,7 @@ function Status() {
 
   useEffect(() => {
     if (data?.status === "completed") router.replace(data.kind === "send" ? `/action/done?id=${data.id}` : "/story");
-    if (data?.status === "failed") router.replace(`/action/failed?kind=${data.kind}&why=declined&amount=${data.amount.toFixed(2)}${data.belief ? `&belief=${data.belief}` : ""}`);
+    if (data?.status === "failed") router.replace(`/action/failed?kind=${data.kind}&why=declined&amount=${data.amount.toFixed(2)}`);
   }, [data, router]);
 
   const check = async () => {
@@ -51,7 +51,7 @@ function Status() {
 
   const stages = (middle: string) => ["Check", middle, data.kind === "send" ? "Sent" : "Added"];
   const what = data.title.replace(/^\S+ /, "");
-  const again = data.kind === "buy" ? "/buy" : data.belief ? `/action/confirm?belief=${data.belief}` : "/story";
+  const again = data.kind === "buy" ? "/buy" : "/memory"; // a send starts on Memory (U21)
 
   if (data.status === "cancelled" || data.status === "expired")
     return (

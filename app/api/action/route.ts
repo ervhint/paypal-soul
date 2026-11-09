@@ -1,5 +1,5 @@
-import { ACTION_COLUMNS, actionView, createPurchase, createSend, loadSupport, SEND, sendAmount, sendReason, settle, type ActionRow } from "@/lib/action";
-import { paymentName } from "@/lib/categories";
+import { ACTION_COLUMNS, actionView, createPurchase, createSend, loadAccounts, saveAccount, SEND, sendAmount, settle, type ActionRow } from "@/lib/action";
+import { person } from "@/lib/correct";
 import { askJson } from "@/lib/llm";
 import { PayPalError, paypalOrders } from "@/lib/paypal";
 import { requestDb } from "@/lib/session";
@@ -7,7 +7,7 @@ import { currentVisitor, secretClient } from "@/lib/supabase";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** Soul's own test account that stands in for the person a send is for, unless they name another sandbox email. */
+/** Soul's own test account that stands in for the person a send is for, unless they pick or type another. */
 const testEmail = () => process.env.PAYPAL_SEND_RECIPIENT || null;
 
 /** The visitor's own action (RLS), asked about at PayPal while it's waiting. */
@@ -21,52 +21,43 @@ async function own(id: string, cancel = false) {
   return actionView(row);
 }
 
-/** The payment names behind a support belief, as the person sees them, leaving out money already sent through Soul. */
-async function namesOf(ids: string[]) {
-  const db = await requestDb();
-  const { data, error } = await db.from("payment").select("name, category, person_id").in("id", ids);
-  if (error) throw error;
-  return data.filter((p) => !(p.person_id && p.name?.startsWith("Sent to "))).map(paymentName);
-}
-
 // `?id=`: status of one action. Coming back from PayPal lands here, so an approved order is captured now,
 // and one the person turned back from on PayPal's cancel link (`cancelled=1`) is cancelled if it wasn't approved.
-// `?belief=`: what the confirm page offers to send for that support belief (AC-9.2), or null.
+// `?accounts=1`: what Memory's send form offers (U21): Soul's Test Account, the accounts saved for people, the range.
 export async function GET(req: Request) {
   const q = new URL(req.url).searchParams;
-  const belief = q.get("belief");
-  if (belief !== null) {
+  if (q.get("accounts") !== null) {
     const db = await requestDb();
     const v = await currentVisitor(db);
-    const b = v?.accountId && UUID.test(belief) ? await loadSupport(db, v.accountId, belief) : null;
-    if (!b) return Response.json(null);
-    return Response.json({ belief: b.id, who: b.who, amount: Number(SEND.amount), min: SEND.min, max: SEND.max, reason: sendReason(b.who, await namesOf(b.paymentIds)), testEmail: testEmail() });
+    return Response.json({ testEmail: testEmail(), saved: v?.accountId ? await loadAccounts(db, v.accountId) : [], min: SEND.min, max: SEND.max });
   }
   const id = q.get("id") ?? "";
   if (!UUID.test(id)) return Response.json(null);
   return Response.json(await own(id, q.get("cancelled") === "1"));
 }
 
-const failed = (reason: string, status = 502) => Response.json({ ok: false, reason }, { status });
+const failed = (reason: string, status = 502, field?: string) => Response.json({ ok: false, reason, ...(field ? { field } : {}) }, { status });
 
-// Makes the sandbox order: Buy Something Small, or send money for a support belief. The purchase is fixed
-// here. For a send the page picks the belief, the sandbox account paid and the amount, which is checked
-// here ($1.00 to $100.00); the person approves it on PayPal with their own sandbox login.
+// Makes the sandbox order: Buy Something Small, fixed here, or send money from Memory (U21): who, how
+// much ($1.00 to $100.00) and the account paid, all checked here. A typed account is saved for that person.
+// Nothing moves until the person approves it on PayPal with their own sandbox login.
 export async function POST(req: Request) {
-  const { kind, belief, to, amount } = (await req.json()) as { kind?: string; belief?: string; to?: string; amount?: unknown };
+  const { kind, who, to, amount } = (await req.json().catch(() => ({}))) as { kind?: string; who?: unknown; to?: unknown; amount?: unknown };
   const db = await requestDb();
   const v = await currentVisitor(db);
   if (!v?.accountId) return failed("Choose the data to read first.", 409);
   const origin = new URL(req.url).origin;
   try {
     if (kind === "send") {
-      const b = typeof belief === "string" && UUID.test(belief) ? await loadSupport(db, v.accountId, belief) : null;
-      if (!b) return failed("I can't find what this payment was for any more.", 404);
-      const email = to === "test" ? testEmail() : typeof to === "string" ? to.trim().slice(0, 254) : null;
+      const name = person(who);
+      if (!name) return failed("Say who it's for.", 400, "who");
       const sum = sendAmount(amount);
-      if (!sum) return Response.json({ ok: false, reason: `Choose an amount from $${SEND.min}.00 to $${SEND.max}.00.`, field: "amount" }, { status: 400 });
-      if (!email || !EMAIL.test(email)) return failed("Enter a sandbox email.", 400);
-      const a = await createSend(secretClient(), v.id, v.accountId, b, await namesOf(b.paymentIds), email, origin, paypalOrders, sum);
+      if (!sum) return failed(`Choose an amount from $${SEND.min}.00 to $${SEND.max}.00.`, 400, "amount");
+      const typed = to !== "test" && typeof to === "string" ? to.trim().slice(0, 254) : null;
+      const email = to === "test" ? testEmail() : typed;
+      if (!email || !EMAIL.test(email)) return failed("Enter an account email.", 400, "account");
+      if (typed) await saveAccount(db, v.id, v.accountId, name, typed);
+      const a = await createSend(secretClient(), v.id, v.accountId, name, email, origin, paypalOrders, sum);
       return Response.json({ ok: true, id: a.id });
     }
     const a = await createPurchase(secretClient(), v.id, v.accountId, origin, paypalOrders);

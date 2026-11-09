@@ -29,7 +29,7 @@ const short = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "s
 const clip = (s: unknown, max: number) => (typeof s === "string" ? s.replace(/[\p{Cc}\p{Cf}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, max) : "");
 const SELF = new Set(["you", "me", "myself", "yourself", "i"]);
 /** A person's name or role, as Soul says it back ("your mum", "Sam"), or null if it doesn't read as one. */
-const person = (v: unknown) => {
+export const person = (v: unknown) => {
   const s = clip(v, 40);
   return s && /^\p{L}[\p{L}\p{M}' .-]*$/u.test(s) && !SELF.has(s.toLowerCase()) ? s : null;
 };

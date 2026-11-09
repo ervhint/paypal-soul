@@ -1,13 +1,29 @@
 "use client";
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/lib/use-api";
-import { PaymentRow, Sheet, Skeleton, Toast, useToast } from "@/components/ui";
+import { PaymentRow, Sheet, Skeleton, Toast, money, useToast } from "@/components/ui";
+import { SendForm } from "@/components/send-form";
 import { titleCase } from "@/lib/title-case";
 import type { Memory, Payment } from "@/lib/types";
 
 const CHIPS = 5;
-type Data = { memory: Memory[]; payments: Payment[] };
+type Person = { who: string; beliefId: string | null; last: { actionId: string; status: "waiting" | "completed"; amount: number; at: string } | null };
+type Data = { memory: Memory[]; payments: Payment[]; people: Person[] };
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/** The person's latest send, under their name on Memory (U21). */
+function LastSend({ p }: { p: Person }) {
+  if (!p.last) return null;
+  const paid = p.last.status === "completed";
+  return (
+    <p className="send-last">
+      {paid ? `Sent ${money(p.last.amount)} on ${day(p.last.at)}.` : `${money(p.last.amount)} is waiting for your approval on PayPal.`}{" "}
+      <Link className="link" href={paid ? `/action/done?id=${p.last.actionId}` : `/action/status?id=${p.last.actionId}`}>{paid ? "See the Payment" : "Open the Payment"}</Link>
+    </p>
+  );
+}
 type Reply = ({ status: "done" } & Data) | { status: "ask"; question: string; options: string[] } | { status: "error"; message: string };
 
 const patch = (body: object): Promise<Reply> =>
@@ -23,6 +39,8 @@ export default function MemoryPage() {
   const [question, setQuestion] = useState<{ question: string; options: string[] } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [shown, setShown] = useState<{ text: string; pays: Payment[]; of: number } | null>(null);
+  const [sending, setSending] = useState<string | null>(null); // who the Send Money form is open for
+  const stopSending = useCallback(() => setSending(null), []);
   const closeShown = useCallback(() => setShown(null), []);
   const router = useRouter();
   const toast = useToast();
@@ -54,7 +72,7 @@ export default function MemoryPage() {
     <div className="wrap narrow">
       <p className="eyebrow">What I Remember About You</p>
       <h1 className="display" style={{ marginTop: 12, fontSize: "clamp(32px, 4.6vw, 54px)" }}>Memory</h1>
-      <p className="lead">Everything I believe, in plain words. Edit a belief, or tell me to stop using it. Each one comes from payments or from something you told me.</p>
+      <p className="lead">Everything I believe, in plain words. Edit a belief, or tell me to stop using it. Each one comes from payments or from something you told me. You can send money to the people here through PayPal.</p>
 
       {!data ? (
         <Skeleton lines={4} />
@@ -64,6 +82,7 @@ export default function MemoryPage() {
         <ul className="mem">
           {data.memory.map((m) => {
             const pays = data.payments.filter((p) => m.paymentIds.includes(p.id));
+            const person = m.active ? data.people.find((p) => p.beliefId === m.id) : undefined;
             return (
             <li key={m.id} className={m.active ? "" : "off"}>
               <div>
@@ -89,7 +108,10 @@ export default function MemoryPage() {
               <div className={`mem-actions${editing === m.id ? " held" : ""}`}>
                 {m.active && <button className="btn dark small" disabled={!!busy} onClick={() => { setEditing(m.id); setDraft(m.text); setQuestion(null); }}>Edit</button>}
                 <button className="btn line small" disabled={!!busy} onClick={() => toggle(m)}>{busy === m.id ? "Rewriting Your Story…" : m.active ? "Stop Using This" : "Use Again"}</button>
+                {person && sending !== person.who && <button className="btn small" disabled={!!busy} onClick={() => { setSending(person.who); setEditing(null); }}>Send Money to {titleCase(person.who)}</button>}
               </div>
+              {person && <LastSend p={person} />}
+              {person && sending === person.who && <SendForm who={person.who} onCancel={stopSending} />}
               {editing === m.id && (
                 <form onSubmit={(e) => { e.preventDefault(); save(m); }}>
                   <textarea className="field" rows={2} maxLength={300} value={draft} onChange={(e) => { setDraft(e.target.value); setQuestion(null); }} aria-label="Edit belief" autoFocus />
@@ -114,6 +136,25 @@ export default function MemoryPage() {
             );
           })}
         </ul>
+      )}
+      {!!data?.people.some((p) => !p.beliefId) && (
+        <section className="sent-to">
+          <h2>People You&rsquo;ve Sent Money To</h2>
+          <ul className="mem">
+            {data.people.filter((p) => !p.beliefId).map((p) => (
+              <li key={p.who}>
+                <div>
+                  <div className="mem-text">{titleCase(p.who)}</div>
+                  <LastSend p={p} />
+                </div>
+                <div className="mem-actions">
+                  {sending !== p.who && <button className="btn small" onClick={() => setSending(p.who)}>Send Money to {titleCase(p.who)}</button>}
+                </div>
+                {sending === p.who && <SendForm who={p.who} onCancel={stopSending} />}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       <section className="danger">
         <h2>Delete My Data</h2>
