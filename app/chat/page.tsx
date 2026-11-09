@@ -37,8 +37,9 @@ async function readReply(res: Response, onStep: (step: string) => void): Promise
 }
 
 export default function ChatPage() {
-  const { data, setData, loaded } = useApi<{ messages: Msg[] }>("/api/chat");
+  const { data, setData, loaded } = useApi<{ messages: Msg[]; left: number }>("/api/chat");
   const msgs = data?.messages ?? [];
+  const left = data?.left;
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState("");
@@ -62,9 +63,9 @@ export default function ChatPage() {
     return () => clearInterval(timer);
   }, [busy]);
 
-  const add = (m: Msg) => setData((d) => ({ messages: [...(d?.messages ?? []), m] }));
+  const add = (m: Msg, used = 0) => setData((d) => ({ messages: [...(d?.messages ?? []), m], left: Math.max(0, (d?.left ?? 0) - used) }));
   const ask = async (q: string) => {
-    if (!q.trim() || busy) return;
+    if (!q.trim() || busy || left === 0) return;
     add({ role: "user", text: q, sources: [], none: false });
     setText("");
     setBusy(true);
@@ -75,7 +76,8 @@ export default function ChatPage() {
       .catch(() => FAILED as Reply);
     setBusy(false);
     // A refusal or a failed answer shows here only; it isn't saved or counted.
-    add(r.status === "answered" ? { role: "soul", text: r.text!, sources: r.sources!, none: r.none! } : { role: "soul", text: r.message!, sources: [], none: true });
+    if (r.status === "answered") add({ role: "soul", text: r.text!, sources: r.sources!, none: r.none! }, 1);
+    else add({ role: "soul", text: r.message!, sources: [], none: true });
   };
 
   return (
@@ -126,8 +128,13 @@ export default function ChatPage() {
           )}
           <form onSubmit={(e) => { e.preventDefault(); ask(text); }}>
             <input className="field" value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask a Question" maxLength={300} aria-label="Your question" />
-            <button className="btn" disabled={busy || !text.trim()}>Ask</button>
+            <button className="btn" disabled={busy || !text.trim() || left === 0}>Ask</button>
           </form>
+          {left !== undefined && (
+            <p className="questions-left">
+              {left === 0 ? "No Questions Left Today · More After 00:00 UTC" : `${left} ${left === 1 ? "Question" : "Questions"} Left Today`}
+            </p>
+          )}
         </div>
       </div>
 

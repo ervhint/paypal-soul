@@ -1,4 +1,4 @@
-import { answer, chatStore } from "@/lib/chat";
+import { DAILY_QUESTIONS, answer, chatStore, dayStart } from "@/lib/chat";
 import { askJson, askTools, creditLeft } from "@/lib/llm";
 import { requestDb } from "@/lib/session";
 import { paymentView } from "@/lib/story";
@@ -13,12 +13,12 @@ const NO_DATA = { status: "refused", message: "Choose the data to read first." }
 export async function GET() {
   const db = await requestDb();
   const v = await currentVisitor(db);
-  if (!v?.accountId) return Response.json({ messages: [] });
+  if (!v?.accountId) return Response.json({ messages: [], left: DAILY_QUESTIONS });
   const store = chatStore(db, v.id, v.accountId);
-  const [turns, pays] = await Promise.all([store.history(200), store.payments()]);
+  const [turns, pays, asked] = await Promise.all([store.history(200), store.payments(), store.askedSince(dayStart(new Date()))]);
   const view = new Map(pays.map((p) => [p.id, paymentView(p)]));
   const messages = turns.map((t) => ({ role: t.role, text: t.text, sources: t.paymentIds.flatMap((id) => view.get(id) ?? []), none: t.role === "soul" && !t.paymentIds.length }));
-  return Response.json({ messages });
+  return Response.json({ messages, left: Math.max(0, DAILY_QUESTIONS - asked) });
 }
 
 // One question, as lines of JSON: each step as it really happens, then the answer or a refusal (AC-16.9).

@@ -210,7 +210,7 @@ a { color: inherit; text-decoration: none; }
 .mem form .field { margin-top: 0; resize: vertical; }
 
 /* Chat (S-07) */
-.chat { display: flex; flex-direction: column; gap: 22px; margin-top: 28px; padding-bottom: 260px; }
+.chat { display: flex; flex-direction: column; gap: 22px; margin-top: 28px; padding-bottom: 56px; }
 .msg { max-width: 560px; font-size: 16.5px; line-height: 1.6; }
 .msg.you { align-self: flex-end; padding: 12px 18px; background: #fff; color: #111; border-radius: 22px 22px 6px 22px; }
 .msg.soul { align-self: flex-start; }
@@ -224,6 +224,7 @@ a { color: inherit; text-decoration: none; }
 .composer form { display: flex; gap: 10px; }
 .composer .field { margin-top: 0; resize: none; border-radius: 999px; padding: 12px 20px; }
 .composer .chips { margin: 0 0 12px; }
+.questions-left { margin: 8px 0 0 20px; font-size: 12.5px; color: var(--muted); }
 .chat-step { color: var(--muted); font-size: 14px; }
 .typing { display: inline-flex; gap: 5px; padding: 8px 0; }
 .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: blink 1s infinite; }
