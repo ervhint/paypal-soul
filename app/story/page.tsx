@@ -271,12 +271,6 @@ function StoryView() {
                 <button className="btn dark small" onClick={() => open(checkClaim)}>Check the Payments</button>
               </div>
             )}
-            {ch.suggest && (
-              <div className="suggest">
-                <p>{ch.suggest.text}</p>
-                <Link className="btn" href={ch.suggest.href}>{ch.suggest.label}</Link>
-              </div>
-            )}
           </article>
         ))}
         {data.chapters.length > shown.length && (

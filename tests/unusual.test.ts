@@ -55,12 +55,25 @@ describe("the unusual rule (T-18.1)", () => {
     expect(unusual([...sends, pay("2026-11-04", "Weekly groceries", 80)])).toEqual([]); // not for mum: a name of its own
   });
 
-  it("leaves one-offs and explained payments out of both sides", () => {
+  it("leaves one-offs out of both sides", () => {
     expect(unusual([...sends, { ...big, one_off: true }])).toEqual([]);
-    expect(unusual([...sends, { ...big, explained: true }])).toEqual([]);
     const gift = { ...pay("2026-10-26", "Sent to your mum", 200, mum), one_off: true };
     expect(unusual([...sends, gift, big]).map((u) => u.usual)).toEqual([25]);
-    expect(unusual([{ ...sends[0], explained: true }, sends[1], sends[2], big])).toEqual([]); // only 2 earlier left
+  });
+
+  it("never asks again about an answered payment, yet still counts it as an earlier one", () => {
+    expect(unusual([...sends, { ...big, explained: true }])).toEqual([]);
+    expect(unusual([{ ...sends[0], explained: true }, sends[1], sends[2], big]).map((u) => u.usual)).toEqual([25]); // still 3 earlier
+  });
+
+  it("after Same as Usual on $80, another $80 isn't asked about, but $130 is, against the $80", () => {
+    const answered = { ...big, explained: true };
+    expect(unusual([...sends, answered, pay("2026-11-11", "Sent to your mum", 80, mum)])).toEqual([]);
+    expect(unusual([...sends, answered, pay("2026-11-11", "Sent to your mum", 84, mum)])).toEqual([]); // under 1.5 times $80
+    const bigger = pay("2026-11-11", "Sent to your mum", 130, mum);
+    const [u] = unusual([...sends, answered, bigger]);
+    expect(u).toMatchObject({ usual: 80 });
+    expect(u.payment.id).toBe(bigger.id);
   });
 
   it("never marks a payment Soul can't identify, money received, or the earliest of a run", () => {
@@ -84,14 +97,31 @@ describe("the card and the story brief (T-18.5)", () => {
       { id: "nov", week: "2026-11-02", paymentIds: [big.id], claims: [{ id: "c1", paymentIds: ["x"] }, { id: "c2", paymentIds: [big.id] }] },
       { id: "oct", week: "2026-10-19", paymentIds: ids(sends), claims: [{ id: "c3", paymentIds: ids(sends) }] },
     ];
-    expect(noticeFor(chapters, [u])).toEqual({ chapterId: "nov", claimId: "c2", paymentId: big.id, ...noticeText(u), paymentIds: [big.id, sends[2].id, sends[1].id, sends[0].id] });
-    expect(noticeFor(chapters, [])).toBe(null);
+    const now = new Date("2026-11-09T12:00:00Z");
+    expect(noticeFor(chapters, [u], now)).toEqual({ chapterId: "nov", claimId: "c2", paymentId: big.id, ...noticeText(u), paymentIds: [big.id, sends[2].id, sends[1].id, sends[0].id] });
+    expect(noticeFor(chapters, [], now)).toBe(null);
+  });
+
+  it("asks only about payments from the last 30 days", () => {
+    const chapters = [{ id: "nov", week: "2026-11-02", paymentIds: [big.id], claims: [{ id: "c1", paymentIds: [big.id] }] }];
+    expect(noticeFor(chapters, [u], new Date("2026-12-04T10:00:00Z"))?.paymentId).toBe(big.id); // 30 days after Nov 4
+    expect(noticeFor(chapters, [u], new Date("2026-12-04T10:00:01Z"))).toBe(null);
   });
 
   it("the brief gives the week's unusual payment with the usual amount and the earlier payments by ref", () => {
     const { data } = briefFor(["2026-11-02"], all);
     expect(data.weeks[0].unusual).toEqual([{ paymentRef: "p1", amount: "$80.00", usual: "$25.00", for: "your mum", earlierRefs: ["p2", "p3", "p4"] }]);
     expect(briefFor(["2026-10-12"], all).data.weeks[0].unusual).toBeUndefined();
+  });
+
+  it("the brief gives only the latest 5 earlier payments, while the usual comes from all of them", () => {
+    const many = Array.from({ length: 12 }, (_, i) => pay(`2026-09-${String(i + 1).padStart(2, "0")}`, `Help for mum ${i}`, i < 6 ? 10 : 30, mum)); // one name each, so no repeat brings them all
+    const huge = pay("2026-11-04", "Sent to your mum", 80, mum);
+    const { data, refs } = briefFor(["2026-11-02"], [...many, huge]);
+    const [w] = data.weeks[0].unusual!;
+    expect(w.usual).toBe("$20.00"); // median of all 12
+    expect(w.earlierRefs.map((r) => [...refs].find(([, x]) => x === r)![0])).toEqual(ids(many.slice(-5)));
+    expect(data.payments).toHaveLength(6); // the payment and its 5 earlier ones, nothing older
   });
 
   it("a sentence may state it with code's figures and cite the earlier payments; a made-up usual amount is dropped", () => {
@@ -172,7 +202,8 @@ describe("the I Noticed card on Staging (T-18.2–T-18.4, BFF)", () => {
     const id = await choosePrepared(db(), null);
     made.push(id);
     const accountId = await preparedAccountId();
-    // Two payments only this visitor sees, far bigger than the prepared repeat with the most payments.
+    // Two payments only this visitor sees, far bigger than the prepared repeat with the most payments, the second
+    // far bigger than the first, so it's still unusual once the first is called usual.
     const { data: shared } = await secretClient().from("payment").select("name, amount, category").eq("account_id", accountId).is("person_id", null);
     const byName = new Map<string, { name: string; amount: number; category: string | null }[]>();
     for (const p of shared!) if (p.name && Number(p.amount) > 0) byName.set(p.name.toLowerCase(), [...(byName.get(p.name.toLowerCase()) ?? []), p]);
@@ -180,8 +211,8 @@ describe("the I Noticed card on Staging (T-18.2–T-18.4, BFF)", () => {
     expect(run.length).toBeGreaterThanOrEqual(3);
     const top = Math.max(...run.map((p) => Number(p.amount)));
     const later = (d: number) => new Date(Date.now() + d * 60_000).toISOString();
-    const odd = (txn: string, at: string) => ({ account_id: accountId, person_id: id, paypal_txn_id: txn, occurred_at: at, amount: top * 2 + 10, currency: "USD", name: run[0].name, payee: "Test Store", event_code: "T0006", category: run[0].category });
-    const { data: rows, error } = await secretClient().from("payment").insert([odd(`U18-A-${id}`, later(-2)), odd(`U18-B-${id}`, later(-1))]).select("id, paypal_txn_id");
+    const odd = (txn: string, at: string, amount: number) => ({ account_id: accountId, person_id: id, paypal_txn_id: txn, occurred_at: at, amount, currency: "USD", name: run[0].name, payee: "Test Store", event_code: "T0006", category: run[0].category });
+    const { data: rows, error } = await secretClient().from("payment").insert([odd(`U18-A-${id}`, later(-2), top * 2 + 10), odd(`U18-B-${id}`, later(-1), (top * 2 + 10) * 2 + 10)]).select("id, paypal_txn_id");
     if (error) throw error;
     const [a, b] = [rows!.find((r) => r.paypal_txn_id.startsWith("U18-A"))!.id, rows!.find((r) => r.paypal_txn_id.startsWith("U18-B"))!.id];
     await buildStory(db(), id, accountId, llm);
@@ -199,7 +230,7 @@ describe("the I Noticed card on Staging (T-18.2–T-18.4, BFF)", () => {
     expect(await sameAsUsual(db(), id, accountId, a)).toEqual({ status: "error", message: ANSWERED });
     const s2 = await readStory(db(), accountId);
     expect(s2.chapters.map((c) => c.claims.map((k) => k.id))).toEqual(chaptersBefore);
-    expect(s2.notice?.paymentId).toBe(b); // the second one is still bigger than usual
+    expect(s2.notice?.paymentId).toBe(b); // the second is still much bigger than the first, now the usual
     expect((await readMemory(db(), accountId)).memory.some((m) => m.kind === "check")).toBe(false);
 
     // T-18.3: Tell Soul "it was a birthday gift" on the card makes a one-off (U17), rewrites, and the card goes.

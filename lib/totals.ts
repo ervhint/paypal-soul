@@ -121,19 +121,21 @@ const usualKey = (p: StoryPayment) => (p.for_who ? `who:${p.for_who.toLowerCase(
 
 /**
  * AC-18.1: a spending payment is unusual when its name, or its person for support, has at least 3 earlier
- * payments and it's at least 1.5 times their median and at least $5 more. One-offs (U17) and payments the
- * person already explained are left out of both sides. Oldest first. Chat and the story both use this.
+ * payments and it's at least 1.5 times their usual and at least $5 more. The usual is the earlier payments'
+ * median, or the biggest of them the person already answered about, if that's more: they said it was normal,
+ * so a payment like it isn't asked about again. An answered payment is never unusual itself, but it still
+ * counts as an earlier one. One-offs (U17) are left out of both sides. Oldest first. Chat and the story both use this.
  */
 export function unusual(pays: StoryPayment[]): Unusual[] {
-  const kept = pays.filter((p) => p.amount > 0 && !p.one_off && !p.explained).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
+  const kept = pays.filter((p) => p.amount > 0 && !p.one_off).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
   const seen = new Map<string, StoryPayment[]>();
   const out: Unusual[] = [];
   for (const p of kept) {
     const key = usualKey(p);
     if (!key) continue;
     const earlier = seen.get(key) ?? [];
-    if (earlier.length >= 3) {
-      const usual = median(earlier.map((e) => cents(e.amount)));
+    if (!p.explained && earlier.length >= 3) {
+      const usual = Math.max(median(earlier.map((e) => cents(e.amount))), ...earlier.filter((e) => e.explained).map((e) => cents(e.amount)));
       if (cents(p.amount) * 2 >= usual * 3 && cents(p.amount) - usual >= 500) out.push({ payment: p, usual: usual / 100, earlier: [...earlier], who: p.for_who ?? null, name: paymentName(p) });
     }
     seen.set(key, [...earlier, p]);

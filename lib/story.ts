@@ -47,6 +47,9 @@ export function staleWeeks(pays: StoryPayment[], saved: { week: string; payment_
   return [...byWeek].filter(([w, ids]) => !was.has(w) || !sameIds(ids, was.get(w)!)).map(([w]) => w).sort().reverse();
 }
 
+/** How many of an unusual payment's earlier payments the LLM gets to cite, the latest ones. Code works out the usual from all of them. */
+const EARLIER_REFS = 5;
+
 /**
  * What the LLM gets for some weeks: per week the figures code found, what the person told Soul about its
  * payments, and the payments by ref. Nothing else. `all` already has `told` applied.
@@ -82,7 +85,7 @@ export function briefFor(weeks: string[], all: StoryPayment[], told: Told[] = []
       });
     const bigger = odd
       .filter((u) => weekOf(u.payment.occurred_at) === week)
-      .map((u) => ({ paymentRef: ref(u.payment), amount: money(u.payment.amount), usual: money(u.usual), ...(u.who ? { for: u.who } : { name: u.name }), earlierRefs: u.earlier.map(ref) }));
+      .map((u) => ({ paymentRef: ref(u.payment), amount: money(u.payment.amount), usual: money(u.usual), ...(u.who ? { for: u.who } : { name: u.name }), earlierRefs: u.earlier.slice(-EARLIER_REFS).map(ref) }));
     const toldYou = told
       .map((b) => ({ said: b.text, paymentRefs: inWeek.filter((p) => b.paymentIds.includes(p.id)).map(ref), ...(isOneOff(b) ? { oneOff: true } : {}) }))
       .filter((b) => b.paymentRefs.length);
@@ -376,7 +379,7 @@ export async function readStory(db: SupabaseClient, accountId: string) {
   const [raw, told, chapters, beliefs, corrections] = await Promise.all([
     loadPayments(db, accountId),
     loadTold(db, accountId),
-    must(db.from("chapter").select("id, week, title, starts_on, ends_on, is_new, suggestion, payment_ids, claim(id, position, text, payment_ids, belief_id, rewritten)").eq("account_id", accountId).order("ends_on", { ascending: false }).order("is_new", { ascending: false }).order("created_at", { ascending: false })),
+    must(db.from("chapter").select("id, week, title, starts_on, ends_on, is_new, payment_ids, claim(id, position, text, payment_ids, belief_id, rewritten)").eq("account_id", accountId).order("ends_on", { ascending: false }).order("is_new", { ascending: false }).order("created_at", { ascending: false })),
     must(db.from("belief").select(BELIEF_COLUMNS).eq("account_id", accountId).eq("active", true).neq("kind", "check").order("created_at")),
     must(db.from("correction").select("id, claim_id, claim_before, claim_after, notes, undo").eq("account_id", accountId).is("seen_at", null).is("undone_at", null).not("claim_id", "is", null).order("created_at", { ascending: false }).limit(1)),
   ]);
@@ -390,7 +393,6 @@ export async function readStory(db: SupabaseClient, accountId: string) {
     title: c.title,
     when: c.starts_on === c.ends_on ? short(c.starts_on) : `${short(c.starts_on)} – ${short(c.ends_on)}`,
     fresh: c.is_new && i === 0,
-    suggest: c.suggestion ?? undefined,
     claims: [...(c.claim as { id: string; position: number; text: string; payment_ids: string[]; belief_id: string | null; rewritten: boolean }[])]
       .sort((a, b) => a.position - b.position)
       .map((k) => ({ id: k.id, text: k.text, paymentIds: k.payment_ids, belief: k.belief_id ?? undefined, rewritten: k.rewritten })),

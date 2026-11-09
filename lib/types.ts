@@ -8,7 +8,6 @@ export type Chapter = {
   when: string;
   fresh?: boolean;
   claims: Claim[];
-  suggest?: { text: string; label: string; href: string };
 };
 export type Memory = {
   id: string;

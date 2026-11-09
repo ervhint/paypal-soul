@@ -16,14 +16,19 @@ export function noticeText(u: Unusual) {
 
 type ChapterIn = { id: string; week: string | null; paymentIds: string[]; claims: { id: string; paymentIds: string[] }[] };
 
+/** Soul asks only about payments from the last 30 days: older ones sit in chapters behind Show Older Chapters. */
+export const ASK_DAYS = 30;
+
 /**
- * The card for the newest week chapter (newest first) that holds an unexplained unusual payment, or null. A
- * payment's own New chapter (U8, U9) has no week, so a correction can't rewrite it. The claim is the sentence
- * that cites the payment, else the chapter's first, so Tell Soul rewrites that chapter.
+ * The card for the newest week chapter (newest first) that holds an unexplained unusual payment from the last
+ * 30 days, or null. A payment's own New chapter (U8, U9) has no week, so a correction can't rewrite it. The
+ * claim is the sentence that cites the payment, else the chapter's first, so Tell Soul rewrites that chapter.
  */
-export function noticeFor(chapters: ChapterIn[], odd: Unusual[]): Notice | null {
+export function noticeFor(chapters: ChapterIn[], odd: Unusual[], now = new Date()): Notice | null {
+  const since = new Date(+now - ASK_DAYS * 86_400_000).toISOString();
+  const recent = odd.filter((x) => x.payment.occurred_at >= since);
   for (const ch of chapters.filter((c) => c.week)) {
-    const u = odd.find((x) => ch.paymentIds.includes(x.payment.id));
+    const u = recent.find((x) => ch.paymentIds.includes(x.payment.id));
     const claim = u && (ch.claims.find((c) => c.paymentIds.includes(u.payment.id)) ?? ch.claims[0]);
     if (!u || !claim) continue;
     return { chapterId: ch.id, claimId: claim.id, paymentId: u.payment.id, ...noticeText(u), paymentIds: [u.payment.id, ...[...u.earlier].reverse().map((p) => p.id)] };
