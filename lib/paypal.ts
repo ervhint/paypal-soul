@@ -157,8 +157,11 @@ export type Orders = {
 /** The approval page for an order, the same link PayPal returns when the order is made. */
 export const approveLink = (orderId: string) => `https://www.sandbox.paypal.com/checkoutnow?token=${encodeURIComponent(orderId)}`;
 
+/** The `soul` app's token: orders, captures and its webhook's signature check (U15). */
+export const soulToken = () => token(process.env.PAYPAL_CLIENT_ID!, process.env.PAYPAL_CLIENT_SECRET!);
+
 const soulHeaders = async (extra: Record<string, string> = {}) => ({
-  Authorization: `Bearer ${await token(process.env.PAYPAL_CLIENT_ID!, process.env.PAYPAL_CLIENT_SECRET!)}`,
+  Authorization: `Bearer ${await soulToken()}`,
   "Content-Type": "application/json",
   ...extra,
 });

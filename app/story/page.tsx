@@ -55,6 +55,18 @@ function StoryView() {
   }, [runSync]);
   const state = (demo === "syncing" || demo === "offline" ? demo : null) ?? sync;
 
+  // Live chapters (U15): while an order made in Soul waits, the story reads the saved story again every 5s
+  // (no PayPal call), and for 30s after it settles, so the chapter PayPal's webhook writes shows by itself.
+  // It stops 15 minutes after opening, so a forgotten order doesn't keep asking.
+  const live = !!data?.actions.some((a) => a.status === "waiting");
+  const watch = useRef({ until: 0, opened: Date.now() });
+  useEffect(() => {
+    if (live) watch.current.until = Date.now() + 30_000;
+    if (Date.now() > watch.current.until || Date.now() - watch.current.opened > 15 * 60_000) return;
+    const t = setTimeout(() => reload().catch(() => {}), 5000);
+    return () => clearTimeout(t);
+  }, [data, live, reload]);
+
   const closeMissing = useCallback(() => setMissing(false), []);
   const refresh = async () => {
     const added = await runSync();
