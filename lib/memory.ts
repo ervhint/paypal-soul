@@ -6,7 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { interpret, MAX_SAID, movedIds, nextTold, saveCorrection, saveMoved, undoPoint, WHO_QUESTION, type Reading, type Result } from "@/lib/correct";
 import type { AskJson } from "@/lib/llm";
-import { applyTold, BELIEF_COLUMNS, beliefView, clip, HABIT, loadPayments, loadStopped, loadTold, must, paymentView, saveChapters, short, stopKey, writeChapters, type Told } from "@/lib/story";
+import { applyTold, BELIEF_COLUMNS, beliefView, clip, HABIT, isOneOff, loadPayments, loadStopped, loadTold, must, paymentView, saveChapters, short, stopKey, writeChapters, type Told } from "@/lib/story";
 import { INTEREST, weekOf, type StoryPayment } from "@/lib/totals";
 
 const FAILED = "I couldn't rewrite your story just now, so nothing changed. Try again in a moment.";
@@ -17,6 +17,8 @@ const error = (message: string): Result => ({ status: "error", message });
 type Row = { id: string; kind: string; key: string | null; text: string; who: string | null; category: string | null; payment_ids: string[]; active: boolean };
 const isTold = (b: Row) => b.kind === "support" || b.kind === "told";
 const noticed = (key: string | null) => !!key && (key.startsWith(HABIT) || key.startsWith(INTEREST));
+/** Keys an edit keeps: a habit's or interest's, so a rebuild leaves the person's words, and a one-off's, so it stays apart. */
+const ownKey = (key: string | null) => noticed(key) || isOneOff({ key });
 const toTold = (b: Row): Told => ({ id: b.id, key: b.key, text: b.text, who: b.who, category: b.category, paymentIds: b.payment_ids });
 
 /** Every belief, stopped ones too, with the payments as this person sees them, for the chips. */
@@ -44,7 +46,7 @@ export const whoAfter = (r: Reading, was: string | null) => r.who ?? (r.forSelf 
 
 /** The belief's key after an edit. A habit or interest keeps its own, so a rebuild finds it and leaves the person's words. */
 export function keyAfter(b: Pick<Row, "key" | "who">, who: string | null, category: string | null) {
-  if (noticed(b.key) || who === b.who) return b.key;
+  if (ownKey(b.key) || who === b.who) return b.key;
   return who && !category ? `support:${who.toLowerCase()}` : null;
 }
 

@@ -18,5 +18,6 @@ export type Memory = {
   source: string;
   paymentIds: string[];
   active: boolean;
+  oneOff?: boolean; // a one-time thing the person kept apart from the pattern (U17)
 };
 export type Change = { id: string; claimId: string; before: string; after: string; notes: string[]; canUndo: boolean };

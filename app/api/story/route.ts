@@ -1,4 +1,4 @@
-import { ACTION_COLUMNS, actionView, suggestSends, type ActionRow } from "@/lib/action";
+import { ACTION_COLUMNS, actionView, NOT_ONE_OFF, suggestSends, type ActionRow } from "@/lib/action";
 import { LEFT_OUT_LABELS } from "@/lib/import";
 import { requestDb } from "@/lib/session";
 import { readStory } from "@/lib/story";
@@ -18,7 +18,7 @@ export async function GET() {
     client.from("left_out_row").select("paypal_txn_id, occurred_at, amount, event_code, reason").eq("account_id", v.accountId).order("occurred_at", { ascending: false }),
     client.from("paypal_account").select("synced_through").eq("id", v.accountId).single(),
     client.from("action").select(ACTION_COLUMNS).eq("account_id", v.accountId).order("created_at", { ascending: false }).limit(20),
-    client.from("belief").select("id, who, payment_ids").eq("account_id", v.accountId).eq("kind", "support").eq("active", true).not("who", "is", null).order("updated_at", { ascending: false }),
+    client.from("belief").select("id, who, payment_ids").eq("account_id", v.accountId).eq("kind", "support").eq("active", true).not("who", "is", null).or(NOT_ONE_OFF).order("updated_at", { ascending: false }),
   ]);
   if (rows.error) throw rows.error;
   if (real.error) throw real.error;

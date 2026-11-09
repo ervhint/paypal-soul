@@ -24,7 +24,7 @@ const pay = (i: number, day: string, name: string): StoryPayment => ({
   category: "food_drinks.snacks_drinks",
 });
 const coffee = ["2026-11-02", "2026-11-03", "2026-11-04"].map((d, i) => pay(i, d, "Morning coffee"));
-const reading = (r: Partial<Reading>): Reading => ({ who: null, forSelf: false, needsWho: false, category: null, paymentIds: [], belief: null, ...r });
+const reading = (r: Partial<Reading>): Reading => ({ who: null, forSelf: false, needsWho: false, category: null, paymentIds: [], belief: null, oneOff: false, what: null, ...r });
 
 describe("what an edit means", () => {
   it("keeps who the payments are for unless the edit names someone or says they were the person's own", () => {

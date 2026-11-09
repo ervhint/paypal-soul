@@ -72,6 +72,7 @@ export default function MemoryPage() {
                   <span>{m.sure}</span>
                   <span>{m.source}</span>
                   {m.kind === "interest" && <span className="tag plain">Interest</span>}
+                  {m.oneOff && <span className="tag plain">One-Off</span>}
                   {m.source.startsWith("You Told Me") && <span className="tag">Updated</span>}
                   {!m.active && <span className="tag plain">Not Used</span>}
                 </div>

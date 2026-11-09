@@ -13,6 +13,7 @@ export type StoryPayment = {
   event_code: string;
   category: string | null;
   for_who?: string | null; // someone else the person said it was for (U5), so it isn't spending on them
+  one_off?: boolean; // the person said it was a one-time thing (U17), so it's no part of a pattern
 };
 export type Sureness = "not_sure" | "fairly_sure" | "sure";
 export type Repeat = {
@@ -58,7 +59,7 @@ const SUBSCRIPTION = "T0002";
 export function repeats(pays: StoryPayment[], stopped: string[] = []): Repeat[] {
   const groups = new Map<string, StoryPayment[]>();
   for (const p of pays) {
-    if (p.amount <= 0 || paymentName(p) === UNKNOWN_PAYMENT) continue;
+    if (p.amount <= 0 || p.one_off || paymentName(p) === UNKNOWN_PAYMENT) continue;
     const key = p.name!.trim().toLowerCase().replace(/\s+/g, " ");
     groups.get(key)?.push(p) ?? groups.set(key, [p]);
   }
@@ -98,7 +99,7 @@ const CHOSEN = ["education.", "food_drinks.", "gift_charity.", "health_personal_
 export function interests(pays: StoryPayment[], stopped: string[] = []): Interest[] {
   const groups = new Map<string, StoryPayment[]>();
   for (const p of pays) {
-    if (p.amount <= 0 || p.for_who || !p.category || !CHOSEN.some((c) => p.category!.startsWith(c))) continue;
+    if (p.amount <= 0 || p.for_who || p.one_off || !p.category || !CHOSEN.some((c) => p.category!.startsWith(c))) continue;
     groups.get(p.category)?.push(p) ?? groups.set(p.category, [p]);
   }
   const out: Interest[] = [];

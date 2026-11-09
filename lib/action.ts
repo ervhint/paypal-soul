@@ -86,12 +86,15 @@ export async function createPurchase(admin: SupabaseClient, personId: string, ac
   }
 }
 
+/** A PostgREST filter for beliefs that aren't one-offs (U17): a one-off never gives a send money suggestion. */
+export const NOT_ONE_OFF = "key.is.null,key.not.like.oneoff:*";
+
 /** A support belief (U5) send money can start from: who the payments were for, and which payments. */
 export type Support = { id: string; who: string; paymentIds: string[] };
 
 /** The person's active support belief with that ID, read with their session (RLS). */
 export async function loadSupport(db: SupabaseClient, accountId: string, beliefId: string): Promise<Support | null> {
-  const { data, error } = await db.from("belief").select("id, who, payment_ids").eq("id", beliefId).eq("account_id", accountId).eq("kind", "support").eq("active", true).maybeSingle();
+  const { data, error } = await db.from("belief").select("id, who, payment_ids").eq("id", beliefId).eq("account_id", accountId).eq("kind", "support").eq("active", true).or(NOT_ONE_OFF).maybeSingle();
   if (error) throw error;
   return data?.who ? { id: data.id, who: data.who, paymentIds: data.payment_ids } : null;
 }
