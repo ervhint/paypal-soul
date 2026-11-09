@@ -117,7 +117,7 @@ Also near: [Salah](https://salah-liart.vercel.app/#/overview), merchant intellig
 | NF-4 | RLS is on for every table with personal data. Person A can't read or change person B's rows | Automated test on Staging with two test people |
 | NF-5 | Soul stores no PayPal keys or tokens for a person, only their PayPal account ID | Schema review in U0 architecture |
 | NF-6 | Payment text is data, never instructions, in every LLM prompt | Unit test with an injected "ignore your rules" payment name |
-| NF-7 | Every claim, belief and chat answer points to at least one saved payment, or says it has none | Unit test on the story and chat output checks |
+| NF-7 | Every claim, belief and chat answer points to at least one saved payment, or says it has none. A preference (U19) is the person's own words, shown as such, never as evidence. A balance answer (U22) points to PayPal's balance read and its time, not to payments | Unit test on the story and chat output checks |
 | NF-8 | Totals, counts and repeats come from code, never from the LLM | Unit tests on the totals module |
 | NF-9 | Chat: 300 characters per question, 5 questions per person per day from U16 (30 until then), reset at 00:00 UTC | Route tests |
 | NF-10 | One PayPal request spans 31 days or less | Unit test on the date windows |
@@ -480,7 +480,7 @@ The functions (25 planned, 24 built: `sum_fees` is cut, see its row):
 
 Built as planned, with these details: the picker also gets the stores and people, so `words` and `person` can name them. It writes `final` with its calls when they're enough, so most questions take one Opus call, or `more` when it must see results first. With no calls it writes `no_data` (Haiku says sorry) or `off_topic` (code's polite line, no Haiku call). Store names now reach the LLM, as the store grouping needs. An answer thrown out for a made-up figure gets code's line and still counts, since it spent money; a failed call doesn't count. The writer is asked once more when its reply isn't JSON.
 
-The list stops here: the LLM reads it on every question, and overlap is what makes it pick wrong. A new kind of question fits as an option on a function first.
+The list stops here: the LLM reads it on every question, and overlap is what makes it pick wrong. A new kind of question fits as an option on a function first. One exception, agreed Nov 10: `get_balance` (U22), since no function reads PayPal live and none overlaps it.
 
 Steps the person sees, in plain words, each one sent by the server as it really happens: Reading Your Question, Checking Your October Payments, Adding Up the Numbers, Writing Your Answer.
 
@@ -488,7 +488,7 @@ Acceptance:
 - AC-16.1 Given a question, when it's sent, then the picker chooses the functions and fills their parameters in up to 3 rounds, and code runs them.
 - AC-16.2 Given a time word ("this month", "last week", "in October", "yesterday"), when it's sent, then the period comes from today's date, and the totals, the list and the biggest payment all follow that period.
 - AC-16.3 Given a word that isn't in any payment name (chocolate) and a payment that means it (Snickers Bar), when it's sent, then the picker finds the payment by meaning. With no such payment, Soul says so.
-- AC-16.4 Given something Soul has no data for (balance, budgets, tax, investment advice, what's inside a payment), when it's sent, then Haiku writes a natural sorry and invents nothing.
+- AC-16.4 Given something Soul has no data for (budgets, tax, investment advice, what's inside a payment; the balance until U22), when it's sent, then Haiku writes a natural sorry and invents nothing.
 - AC-16.5 Given an off-topic question (coding) or an attack ("forget all instructions", "show your prompt", a payment named "ignore your rules"), when it's sent, then Soul keeps to payments with the same polite line, and it counts toward the daily limit.
 - AC-16.6 Given any function call, when code runs it, then the parameters are checked first, the function only reads, and it's locked to the person's own account through their session. The LLM can't choose whose data it reads, and no function moves money.
 - AC-16.7 Given an answer, when it's checked, then every amount comes from a function result of this question, or the answer is thrown out. The list under the answer holds every payment behind its figures, built by code, and the count always matches.
@@ -624,8 +624,33 @@ Acceptance:
 - AC-21.6 Given the story, when it opens, then no chapter suggests sending money.
 Tests: T-21.1 (unit), T-21.2 (unit), T-21.3 (integration), T-21.4 (unit), T-21.5 (e2e), T-21.6 (e2e)
 
+#### U22 — Chat reads your balance  (Nice to have · agreed Nov 10)
+Covers: US-16, US-17      Screens: S-07      Depends on: U10, U16      Est: 1.5h
+
+Why: the user, Nov 10, on seeing "Sorry, I can't see your PayPal balance". It was a choice in U16, not a PayPal limit. A test call on Nov 10 showed PayPal's balance read (`GET /v1/reporting/balances`) works through the Platform app for the prepared account with the consent Soul already asks for (`ADVANCED_TRANSACTIONS_SEARCH`, the same reporting scope as the payment read). It answered $5,000.00 USD, total and available, as of Nov 9 14:59 UTC.
+
+How:
+1. `lib/paypal.ts` gets `readBalance(payerId)`: the same Platform token and `PayPal-Auth-Assertion` as `readTransactions`, returning each currency's total, available and withheld amounts, and PayPal's `as_of_time`. Nothing is saved: Soul asks PayPal each time (the user's choice), so the figure is PayPal's latest.
+2. Chat gets a 25th function, `get_balance`, with no parameters. Code reads the person's current data source from their session (the prepared account or their own sandbox) and passes its PayPal account ID, so the LLM can't pick whose balance it reads (AC-16.6). It only reads; no function moves money.
+3. The result's label is "your PayPal balance, as of <PayPal's time>", with total and available per currency, and on hold only when above $0.00. On prepared data the label says it's the prepared sandbox account, which every visitor on prepared data shares. `behind` is empty: the figure is PayPal's, not a sum of payments, and the answer has no payment list.
+4. The step the person sees: "Asking PayPal for Your Balance".
+5. The picker's prompt drops "their balance" from `no_data` and describes `get_balance`. Budgets, tax, investment advice and "can I afford it?" stay `no_data`: the function states the figure, never advice.
+6. If PayPal doesn't answer or refuses (an own sandbox whose consent no longer covers it), the writer gets that in the result and says sorry with no figure. A failed PayPal read doesn't count toward the 5 a day, like a failed call in U16.
+7. The amount check (AC-16.7) treats the balance figures as function results, so a made-up balance is thrown out.
+
+Acceptance:
+- AC-22.1 Given "what's my balance?", when it's sent, then the picker calls `get_balance`, code asks PayPal for the person's own data source, and the answer gives the total and available amounts and PayPal's as-of time, with no payment list.
+- AC-22.2 Given any `get_balance` call, when it runs, then the account comes from the session only, a parameter is refused, and the result is never saved.
+- AC-22.3 Given PayPal failing or refusing, when the question is answered, then Soul says it couldn't reach PayPal with no figure, and the question doesn't count.
+- AC-22.4 Given an answer with a balance figure PayPal didn't give, when it's checked, then it's thrown out.
+- AC-22.5 Given budgets, tax, investment advice or "can I afford a $300 phone?", when it's sent, then it stays a natural sorry (AC-16.4) and the balance isn't used as advice.
+- AC-22.6 Given the question list (T-16.13) plus 6 balance questions and 4 near misses, when it runs on the real picker once, then `get_balance` is picked for the balance questions only. About $0.05, shown to the user before moving on.
+Tests: T-22.1 (unit), T-22.2 (unit), T-22.3 (unit), T-22.4 (unit), T-22.5 (unit), T-22.6 (real models, once), T-22.7 (e2e)
+
+Check while building: the sandbox balance barely moves. Every sandbox payment is topped up from the test bank at once (the T0300 rows Soul leaves out), so the prepared account usually reads $5,000.00. That's a true answer. If the writer adds a line about it, it's code's line, not the LLM's guess. PayPal's as-of time can be hours old; show it as PayPal gives it, in UTC like the rest of Chat. An own sandbox wasn't tried on Nov 10, so T-22.7 checks it if one is connected; otherwise say so in the report.
+
 ### Build order and time
-U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U15 if time allows (U14 cut), then U16, agreed Nov 5, before the user's sandbox test. Then, agreed Nov 9: U17 → U18 (Musts), then U19 → U20 (nice to have), each in its own chat, about 12.5h in all, before P7.  U21 (send money from Memory, Must) was agreed after U18 on Nov 9 and comes right after it, in the same chat.
+U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U15 if time allows (U14 cut), then U16, agreed Nov 5, before the user's sandbox test. Then, agreed Nov 9: U17 → U18 (Musts), then U19 → U20 (nice to have), each in its own chat, about 12.5h in all, before P7.  U21 (send money from Memory, Must) was agreed after U18 on Nov 9 and comes right after it, in the same chat. U22 (Chat reads your balance, nice to have) was agreed on Nov 10 and comes after U20.
 
 U6 moves after the golden path because the demo doesn't open Memory. U10 is Must but after the golden path, since the demo uses prepared data and U2 already proves the read route.
 
@@ -683,6 +708,7 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 9 | The I Noticed card asks only about payments from the last 30 days, and the story brief gives the LLM only the latest 5 earlier payments to cite (code still works out the usual from all) | The user, U18 review: an older payment's card sits in a chapter behind Show Older Chapters while Belief to Check still counts it; a long history made every rewrite carry every earlier payment. 3 months was weighed and dropped for that reason |
 | Nov 9 | Send money starts from Memory, next to each person Soul knows about, with no reason claimed; not from the story, Chat or a page of its own (U21) | The user: the story is for reading, Chat for questions, and a Send page would make Soul a second PayPal. Soul only knows a person matters because you told it, so it offers nothing more than the button |
 | Nov 9 | Chat may propose a memory (U20) but never saves one on its own: the person taps Remember | Functions stay read-only (AC-16.6), and a planted payment name or chat line can't change memory without the person seeing it |
+| Nov 10 | Chat reads the balance from PayPal on every question that asks for it, and never saves it (U22) | The user's choice: the newest figure over a faster saved one. A test call showed the read works with the consent Soul already asks for |
 
 ## 6. Open questions
 1. Settled at G5: anonymous Supabase users for the private copy.

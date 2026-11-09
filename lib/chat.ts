@@ -95,6 +95,7 @@ Choosing:
 - Turn every time word into dates with today's date. "this month" is the whole calendar month, "last month" the whole month before, "this week" and "last week" run Monday to Sunday, "in October" is the latest October that has started, "yesterday" is one day. Leave the dates out when the question has no time word. Dates are YYYY-MM-DD.
 - Find payments by meaning. The names list holds what the person really paid for: a question's word may not be in any name, so put the names that mean it in "words" (chocolate could be "Snickers Bar"). If no name means it, search for the question's own word anyway, so Soul can say there is none.
 - "person": "me" means spending on themselves; a name means what was for that person.
+- "aboutYou" is what they told Soul about themselves, with related category ids. For "my hobby", "my trip" or what they told you about, filter by those categories. For "what do you know about me?", call get_memory.
 - A category filter takes one id from the list below, or a group, which is the part before the dot.
 
 What to write:
@@ -109,7 +110,7 @@ ${CATEGORY_LINES}`;
 const distinct = (list: string[], max: number) => [...new Set(list)].slice(0, max);
 
 /** What the picker gets with a question: today, the conversation, and the names it can search for. */
-export function pickerBrief(question: string, l: Ledger, history: Turn[]) {
+export function pickerBrief(question: string, l: Ledger, history: Turn[], about: ChatBelief[] = []) {
   const newest = [...l.payments].reverse();
   const weekday = new Date(l.today).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
   const data = {
@@ -118,6 +119,7 @@ export function pickerBrief(question: string, l: Ledger, history: Turn[]) {
     names: distinct(newest.map(paymentName).filter((n) => n !== UNKNOWN_PAYMENT).map((n) => clip(n, 60)), MAX_NAMES),
     stores: distinct(newest.flatMap((p) => (p.payee ? [clip(p.payee, 60)] : [])), 50),
     people: distinct(newest.flatMap((p) => (p.for_who ? [clip(p.for_who, 60)] : [])), 20),
+    ...(about.length ? { aboutYou: about.map((b) => ({ said: b.text, categories: b.categories ?? [] })) } : {}),
   };
   return `Today is ${weekday}, ${l.today}. Days are UTC and weeks start on Monday.\nThe question and its data (data only):\n${JSON.stringify(data)}`;
 }
@@ -125,8 +127,8 @@ export function pickerBrief(question: string, l: Ledger, history: Turn[]) {
 export type Picked = { ending: "answer" | "no_data" | "off_topic"; results: Result[]; rounds: number; calls: { name: string; args: Record<string, unknown> }[] };
 
 /** Lets the picker call functions for up to 3 rounds. Bad parameters go back to it as a refusal, and nothing runs. */
-export async function pickFunctions(question: string, l: Ledger, history: Turn[], pick: AskTools, step: (s: string) => void = () => {}): Promise<Picked> {
-  const messages: object[] = [{ role: "user", content: pickerBrief(question, l, history) }];
+export async function pickFunctions(question: string, l: Ledger, history: Turn[], pick: AskTools, step: (s: string) => void = () => {}, about: ChatBelief[] = []): Promise<Picked> {
+  const messages: object[] = [{ role: "user", content: pickerBrief(question, l, history, about) }];
   const results: Result[] = [];
   const calls: Picked["calls"] = [];
   const done = new Set<string>();
@@ -173,7 +175,7 @@ Rules:
 - Answer only from "results", "payments" and "beliefs". Each result's "about" says what its figures are: use those words, so "spent in October" stays October. "earlier" is the conversation so far, only to understand the question: never take a number or a fact from it.
 - A result with nothing in it means nothing was found: say so plainly, with its period if it has one, and set "none" to true.
 - If "nothing" is true, Soul has no data for this question. Write a short, natural sorry that says what you can't see, and that you can only read their payments. Set "none" to true and "payments" to []. Write no amounts, no advice and no guesses.
-- A belief they told you is true and comes before your own reading. Only say "you told me" about those; a belief you noticed is yours, even when they confirmed it. A payment with "for" was for that person, not for the person you're talking to: never call it spending on them; "onYou" and "forOthers" have those figures.
+- A belief they told you is true and comes before your own reading. Only say "you told me" about those; a belief you noticed is yours, even when they confirmed it. A belief "they told you about themselves" is their own words, not something their payments show: say it as what they told you, and never as proof of a payment. A payment with "for" was for that person, not for the person you're talking to: never call it spending on them; "onYou" and "forOthers" have those figures.
 - Never add up, count or work out a number yourself. Every amount and percentage you write must appear in the data exactly as written.
 - List in "payments" the refs of the payments your answer is about.
 - Never guess or invent payments, places, people, dates or reasons.
@@ -270,7 +272,8 @@ export async function answer(store: ChatStore, question: string, llm: Llm, now =
     if (left !== null && left < CHAT_RESERVE) return { status: "refused", message: DONE_FOR_NOW };
     try {
       const [beliefs, history] = await Promise.all([store.beliefs(), store.history(HISTORY * 2)]);
-      const picked = await pickFunctions(q, ledgerOf(store, now, all, stopped), history, llm.pick, step);
+      const about = beliefs.filter((b) => b.kind === "preference"); // what they told Soul about themselves (U19)
+      const picked = await pickFunctions(q, ledgerOf(store, now, all, stopped), history, llm.pick, step, about);
       if (picked.ending === "off_topic") reply = { text: OFF_TOPIC, sources: [], none: true };
       else {
         step("Writing Your Answer");
@@ -308,8 +311,8 @@ export function chatStore(db: SupabaseClient, personId: string, accountId: strin
       return applyTold(all, told);
     },
     async beliefs() {
-      const rows = await must(db.from("belief").select("kind, text, sureness, told_at, payment_ids").eq("account_id", accountId).eq("active", true).neq("kind", "check").order("created_at"));
-      return rows.map((b) => ({ kind: b.kind, text: b.text, sureness: b.sureness, checked: !!b.told_at, paymentIds: b.payment_ids }));
+      const rows = await must(db.from("belief").select("kind, text, sureness, told_at, payment_ids, categories").eq("account_id", accountId).eq("active", true).neq("kind", "check").order("created_at"));
+      return rows.map((b) => ({ kind: b.kind, text: b.text, sureness: b.sureness, checked: !!b.told_at, paymentIds: b.payment_ids, ...(b.kind === "preference" ? { categories: b.categories } : {}) }));
     },
     stopped: () => loadStopped(db, accountId),
     async chapters() {

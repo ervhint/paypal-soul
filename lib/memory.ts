@@ -4,10 +4,11 @@
 // (AC-6.3), and Use Again brings it back. All three rewrite every week with the belief's payments first, so
 // a failed rewrite changes nothing.
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { editPreference, usePreference } from "@/lib/about";
 import { interpret, MAX_SAID, movedIds, nextTold, saveCorrection, saveMoved, undoPoint, WHO_QUESTION, type Reading, type Result } from "@/lib/correct";
 import type { AskJson } from "@/lib/llm";
 import { peopleOf } from "@/lib/send";
-import { applyTold, BELIEF_COLUMNS, beliefView, clip, HABIT, isOneOff, loadPayments, loadStopped, loadTold, must, paymentView, saveChapters, short, stopKey, writeChapters, type Told } from "@/lib/story";
+import { applyTold, BELIEF_COLUMNS, beliefView, clip, HABIT, isOneOff, loadPayments, loadPreferences, loadStopped, loadTold, must, paymentView, saveChapters, short, stopKey, writeChapters, type Told } from "@/lib/story";
 import { INTEREST, weekOf, type StoryPayment } from "@/lib/totals";
 
 const FAILED = "I couldn't rewrite your story just now, so nothing changed. Try again in a moment.";
@@ -41,9 +42,9 @@ const loadBelief = async (db: SupabaseClient, accountId: string, id: string) =>
   (await db.from("belief").select("id, kind, key, text, who, category, payment_ids, active").eq("id", id).eq("account_id", accountId).neq("kind", "check").maybeSingle()).data as Row | null;
 
 /** Writes every week with these payments, newest first, or null unless all of them worked. */
-async function rewrite(ids: string[], after: StoryPayment[], ask: AskJson, told: Told[], stopped: string[]) {
+async function rewrite(db: SupabaseClient, accountId: string, ids: string[], after: StoryPayment[], ask: AskJson, told: Told[], stopped: string[]) {
   const weeks = [...new Set(after.filter((p) => ids.includes(p.id)).map((p) => weekOf(p.occurred_at)))].sort().reverse();
-  const written = await writeChapters(weeks, after, ask, told, stopped);
+  const written = await writeChapters(weeks, after, ask, told, stopped, await loadPreferences(db, accountId));
   return written.length === weeks.length ? { weeks, written } : null;
 }
 
@@ -63,6 +64,7 @@ export async function editBelief(db: SupabaseClient, personId: string, accountId
   if (said.length > MAX_SAID) return error(`Keep it under ${MAX_SAID} characters.`);
   const b = await loadBelief(db, accountId, input.id);
   if (!b) return error(LOST);
+  if (b.kind === "preference") return editPreference(db, personId, accountId, b.id, input.text, ask); // read like the Tell Soul About You box (U19)
   if (!b.active) return error(STOPPED);
   if (said === b.text) return { status: "done" };
 
@@ -88,7 +90,7 @@ export async function editBelief(db: SupabaseClient, personId: string, accountId
   const after = applyTold(all, next);
 
   // Their words replace what Soul noticed, so the rewrite mustn't state the interest as well.
-  const done = await rewrite(b.payment_ids, after, ask, next, b.key?.startsWith(INTEREST) ? [...stopped, b.key] : stopped);
+  const done = await rewrite(db, accountId, b.payment_ids, after, ask, next, b.key?.startsWith(INTEREST) ? [...stopped, b.key] : stopped);
   const main = done?.written[0];
   if (!done || !main) return error(FAILED);
   const { data: chapter } = await db.from("chapter").select("title, claim(text, belief_id, payment_ids, position)").eq("account_id", accountId).eq("week", done.weeks[0]).maybeSingle();
@@ -119,6 +121,7 @@ export async function editBelief(db: SupabaseClient, personId: string, accountId
 export async function setUsing(db: SupabaseClient, personId: string, accountId: string, id: string, active: boolean, ask: AskJson): Promise<Result> {
   const b = await loadBelief(db, accountId, id);
   if (!b) return error(LOST);
+  if (b.kind === "preference") return usePreference(db, personId, accountId, b.id, active, ask);
   if (b.active === active) return { status: "done" };
 
   const [all, told, wasStopped] = await Promise.all([loadPayments(db, accountId), loadTold(db, accountId), loadStopped(db, accountId)]);
@@ -126,7 +129,7 @@ export async function setUsing(db: SupabaseClient, personId: string, accountId: 
   const stopped = [...wasStopped.filter((k) => k !== stop), ...(stop && !active ? [stop] : [])];
   const next = !active ? told.filter((t) => t.id !== b.id) : isTold(b) ? nextTold(told, toTold(b)) : told;
 
-  const done = await rewrite(b.payment_ids, applyTold(all, next), ask, next, stopped);
+  const done = await rewrite(db, accountId, b.payment_ids, applyTold(all, next), ask, next, stopped);
   if (!done) return error(FAILED);
   const now = new Date().toISOString();
   await must(db.from("belief").update({ active, updated_at: now }).eq("id", b.id)); // the newest told belief wins

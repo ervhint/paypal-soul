@@ -373,3 +373,16 @@ a { color: inherit; text-decoration: none; }
 .send-last .link { font-size: 13.5px; }
 .sent-to { margin-top: 40px; }
 .sent-to h2 { font-size: 18px; font-weight: 600; }
+/* Tell Soul About You (U19) */
+.tell { margin-top: 40px; }
+.tell h2, .mem-head { font-size: 18px; font-weight: 600; }
+.tell > p { margin-top: 8px; color: var(--soft); font-size: 15px; line-height: 1.55; }
+.tell > form { display: grid; gap: 10px; }
+.tell > form .field { margin-top: 18px; }
+.tell-count { color: var(--muted); font-size: 13.5px; }
+/* The list under the box ends on a divider, then the same kind of gap before What I Believe. */
+.tell .mem li:last-child { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.mem-head { margin-top: 48px; }
+.tell .mem form { gap: 14px; margin-top: 6px; }
+.mem-confirm { grid-column: 1 / -1; display: grid; gap: 14px; margin-top: 6px; }
+.mem-confirm p { color: var(--soft); font-size: 15px; line-height: 1.5; }

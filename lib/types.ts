@@ -11,13 +11,15 @@ export type Chapter = {
 };
 export type Memory = {
   id: string;
-  kind: "habit" | "check" | "interest" | "support" | "told";
+  kind: "habit" | "check" | "interest" | "support" | "told" | "preference";
   text: string;
   sure: "Sure" | "Fairly Sure" | "Not Sure";
   source: string;
   paymentIds: string[];
   active: boolean;
   oneOff?: boolean; // a one-time thing the person kept apart from the pattern (U17)
+  topic?: string; // a preference (U19): Priority, Hobby or Preference
+  categories?: string[]; // a preference's related categories, by name
 };
 export type Change = { id: string; claimId: string; before: string; after: string; notes: string[]; canUndo: boolean };
 /** The I Noticed card (U18): code's sentence and question about one unusual payment, and the payments compared. */

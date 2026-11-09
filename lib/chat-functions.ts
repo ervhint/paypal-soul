@@ -15,7 +15,7 @@ const MONTH_DAYS = 30.44;
 const DEFAULT_ROWS = 20;
 export const MAX_ROWS = 60; // payment rows the LLM reads for one question
 
-export type ChatBelief = { kind: string; text: string; sureness: Sureness; checked: boolean; paymentIds: string[] }; // checked: told, corrected or Looks Right
+export type ChatBelief = { kind: string; text: string; sureness: Sureness; checked: boolean; paymentIds: string[]; categories?: string[] }; // checked: told, corrected or Looks Right; categories: a preference's (U19)
 export type ChatChapter = { title: string; startsOn: string; endsOn: string; sentences: string[]; paymentIds: string[] };
 export type ChatCorrection = { said: string; became: string | null; at: string; undone: boolean };
 export type ChatAction = { kind: string; recipient: string; amount: number; fee: number | null; status: string; at: string; txn: string | null };
@@ -175,8 +175,10 @@ function pace(ps: StoryPayment[], l: Ledger) {
 
 const when = (p: StoryPayment) => short(p.occurred_at);
 const idsIn = (l: Ledger, ids: string[]) => l.payments.filter((p) => ids.includes(p.id));
-const source = (b: ChatBelief) => (b.kind === "support" || b.kind === "told" ? "they told you" : b.checked ? "you noticed it and they confirmed it" : "you noticed it in their payments");
-export const beliefView = (b: ChatBelief) => ({ belief: b.text, sureness: b.sureness, from: source(b) });
+const source = (b: ChatBelief) =>
+  b.kind === "preference" ? "they told you about themselves" : b.kind === "support" || b.kind === "told" ? "they told you" : b.checked ? "you noticed it and they confirmed it" : "you noticed it in their payments";
+/** A belief as the LLM reads it. A preference (U19) has no payments: its related categories say what spending it's about. */
+export const beliefView = (b: ChatBelief) => ({ belief: b.text, sureness: b.sureness, from: source(b), ...(b.kind === "preference" ? { relatedCategories: (b.categories ?? []).map(categoryLabel) } : {}) });
 
 const date = { type: "string", description: "YYYY-MM-DD" };
 const PERIOD = { from: { ...date, description: "First day, YYYY-MM-DD" }, to: { ...date, description: "Last day, YYYY-MM-DD" } };
@@ -483,7 +485,7 @@ export const FUNCTIONS: Record<string, Fn> = {
     },
   },
   get_memory: {
-    description: "What Soul believes about the person. Option: only what it's unsure about.",
+    description: "What Soul believes about the person, with what they told Soul about themselves. Option: only what it's unsure about.",
     params: { only_unsure: { type: "boolean" } },
     step: memory,
     async run(a, l) {

@@ -7,7 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { CATEGORY_LINES, categoryLabel, isCategory, paymentName, type Category } from "@/lib/categories";
 import type { AskJson } from "@/lib/llm";
 import { noticeText } from "@/lib/notice";
-import { applyTold, isOneOff, loadPayments, loadStopped, loadTold, must, ONE_OFF, saveChapters, saveHabits, UNUSUAL, writeChapters, type Told, type WrittenChapter, type WrittenClaim } from "@/lib/story";
+import { applyTold, isOneOff, loadPayments, loadPreferences, loadStopped, loadTold, must, ONE_OFF, saveChapters, saveHabits, UNUSUAL, writeChapters, type Told, type WrittenChapter, type WrittenClaim } from "@/lib/story";
 import { totals, unusual, weekOf, type StoryPayment } from "@/lib/totals";
 
 export const MAX_SAID = 300;
@@ -239,7 +239,7 @@ export async function correct(db: SupabaseClient, personId: string, accountId: s
   const week = claim?.chapter.week;
   if (!claim || !week) return error(LOST);
 
-  const [all, told, stopped] = await Promise.all([loadPayments(db, accountId), loadTold(db, accountId), loadStopped(db, accountId)]);
+  const [all, told, stopped, prefs] = await Promise.all([loadPayments(db, accountId), loadTold(db, accountId), loadStopped(db, accountId), loadPreferences(db, accountId)]);
   const before = applyTold(all, told);
   const odd = input.paymentId ? unusual(before).find((u) => u.payment.id === input.paymentId) : undefined;
   if (input.paymentId && !odd) return error(ANSWERED);
@@ -262,7 +262,7 @@ export async function correct(db: SupabaseClient, personId: string, accountId: s
 
   // Rewrite first: if it fails, nothing is saved.
   const weeks = [...new Set([week, ...targets.map((p) => weekOf(p.occurred_at))])].sort().reverse().slice(0, 6);
-  const written = await writeChapters(weeks, after, ask, next, stopped);
+  const written = await writeChapters(weeks, after, ask, next, stopped, prefs);
   const main = written.find((w) => w.week === week);
   if (!main) return error(FAILED);
 
@@ -372,6 +372,7 @@ export async function confirm(db: SupabaseClient, accountId: string, claimId: st
   if (!data) return error(LOST);
   if (!data.belief_id) return { status: "done", sure: false };
   const now = new Date().toISOString();
-  await must(db.from("belief").update({ sureness: "sure", source: `You Checked It, ${short(now)}`, told_at: now }).eq("id", data.belief_id));
+  // A preference (U19) is already the person's own words, so it keeps its source.
+  await must(db.from("belief").update({ sureness: "sure", source: `You Checked It, ${short(now)}`, told_at: now }).eq("id", data.belief_id).neq("kind", "preference"));
   return { status: "done", sure: true };
 }
