@@ -1,13 +1,19 @@
 "use client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { post, useApi } from "@/lib/use-api";
 import { Empty, Receipt, Skeleton } from "@/components/ui";
 import { titleCase } from "@/lib/title-case";
 
-type Offer = { belief: string; who: string; amount: number; reason: string; testEmail: string | null };
+type Offer = { belief: string; who: string; amount: number; min: number; max: number; reason: string; testEmail: string | null };
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** The amount typed, in dollars, when it's a plain amount with at most 2 decimals inside the range; else null. */
+const picked = (s: string, o: Offer) => {
+  const t = s.trim().replace(/^\$/, "");
+  const n = /^\d+(\.\d{1,2})?$/.test(t) ? Number(t) : NaN;
+  return n >= o.min && n <= o.max ? n : null;
+};
 
 function Confirm() {
   const router = useRouter();
@@ -17,6 +23,15 @@ function Confirm() {
   const [pick, setPick] = useState<"test" | "other" | null>(null);
   const [email, setEmail] = useState("");
   const [invalid, setInvalid] = useState(false);
+  const [sum, setSum] = useState<string | null>(null); // what the person typed; the offer's amount until then
+  const [badSum, setBadSum] = useState(false);
+  const sumField = useRef<HTMLInputElement>(null);
+  // A wrong amount is said by the field, above the button, so the page goes back to it.
+  const wrongSum = () => {
+    setBadSum(true);
+    sumField.current?.focus();
+    sumField.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   if (!loaded)
     return (
@@ -36,21 +51,39 @@ function Confirm() {
 
   const who = titleCase(data.who);
   const chosen = pick ?? (data.testEmail ? "test" : "other");
+  const typed = sum ?? data.amount.toFixed(2);
+  const amount = picked(typed, data);
   const send = async () => {
     const to = chosen === "test" ? "test" : email.trim();
+    if (amount === null) return wrongSum();
     if (chosen === "other" && !EMAIL.test(to)) return setInvalid(true);
     setBusy(true);
-    const r = await post("/api/action", { kind: "send", belief: data.belief, to }).catch(() => null);
+    const r = await post("/api/action", { kind: "send", belief: data.belief, to, amount: amount.toFixed(2) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : {};
     if (r?.ok) return router.push(`/action/status?id=${j.id}`);
-    if (r?.status === 400) return setBusy(false), setInvalid(true);
-    router.push(`/action/failed?kind=send&belief=${data.belief}${r?.status === 422 ? "&why=refused" : ""}`);
+    if (r?.status === 400) return setBusy(false), j.field === "amount" ? wrongSum() : setInvalid(true);
+    router.push(`/action/failed?kind=send&belief=${data.belief}&amount=${amount.toFixed(2)}${r?.status === 422 ? "&why=refused" : ""}`);
   };
 
   return (
     <div className="wrap narrow">
-      <Receipt stages={["Check", "Waiting", "Sent"]} now={0} amount={data.amount} title={`Send to ${who}?`}>
+      <Receipt stages={["Check", "Waiting", "Sent"]} now={0} amount={amount ?? 0} title={`Send to ${who}?`}>
         <p className="lead">I suggested this because {data.reason.replace(/^You told me/, "you told me")} Nothing moves until you approve it on PayPal.</p>
+
+        <label className="field-label" htmlFor="amount">How Much?</label>
+        <input
+          className="field"
+          id="amount"
+          ref={sumField}
+          inputMode="decimal"
+          value={typed}
+          onChange={(e) => { setSum(e.target.value); setBadSum(false); }}
+          aria-invalid={badSum}
+          aria-describedby="amount-help"
+        />
+        <p className={badSum ? "field-error" : "note"} id="amount-help" role={badSum ? "alert" : undefined}>
+          {badSum ? `Choose an amount from $${data.min}.00 to $${data.max}.00.` : `From $${data.min}.00 to $${data.max}.00, from your own sandbox account.`}
+        </p>
 
         <span className="field-label" id="to-label">Which Sandbox Account Stands In for {who}?</span>
         <div className="pick" role="radiogroup" aria-labelledby="to-label">

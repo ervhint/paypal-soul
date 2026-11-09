@@ -652,13 +652,14 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 5 | The $1 "Soul Send Money Test" row stays in the prepared story | The user's call |
 | Nov 5 | Repo stays private until about Nov 12, then goes public under the MIT license | Going public earlier gives away the plan for little gain. MIT is short, widely known and meets the open source rule |
 | Nov 9 | Four units close the gaps against the user's five requirements: U17 keep exceptions apart, U18 ask about an unusual payment (Musts), U19 tell Soul about you, U20 chat remembers what you tell it (nice to have). Each runs in its own chat, Musts first | The user wants every requirement met. A Devpost search on Nov 9 found PayPal history, auto-categories and grounded chat in several entries (FinSight AI, Little Wallet, Stella), but no story you correct, so revising and noticing are what set Soul apart |
+| Nov 9 | Send money asks how much, $1.00 to $100.00, checked on the server, and the suggestion stays after a send, for everyone. Replaces U9's fixed $25.00 sent once | The user: a send screen asks how much. The person approves every send on PayPal with their own sandbox login, so no shared money is at risk. It also lets U18's live test make a bigger send |
 | Nov 9 | Chat may propose a memory (U20) but never saves one on its own: the person taps Remember | Functions stay read-only (AC-16.6), and a planted payment name or chat line can't change memory without the person seeing it |
 
 ## 6. Open questions
 1. Settled at G5: anonymous Supabase users for the private copy.
 2. Do daily subscription charges repeat? Check the prepared account on Nov 3–4. If they don't, the 7-day minimum isn't met by Nov 9 and the prepared story stays thin.
 3. Answered Nov 5: the $1 send money test stays in the prepared story, the user's call. It does show in the report rows now, as "Soul Send Money Test".
-4. On prepared data, sending money needs the person's own sandbox login to approve. Which recipient is prefilled? Answered in U9 (Nov 5): Soul's test account (the second sandbox personal account, `PAYPAL_SEND_RECIPIENT`), with another sandbox email as the other choice. The amount is $25.00, fixed on the server.
+4. On prepared data, sending money needs the person's own sandbox login to approve. Which recipient is prefilled? Answered in U9 (Nov 5): Soul's test account (the second sandbox personal account, `PAYPAL_SEND_RECIPIENT`), with another sandbox email as the other choice. The amount was $25.00, fixed on the server; since Nov 9 (U18) the person picks $1.00 to $100.00 and can send again.
 5. Answered Nov 5: consent doesn't cover subscriptions, so U14 was cut. The Platform app gets 404 reading a subscription for the consented buyer, also after a test consent added `billing-agreements`. A subscription belongs to the merchant; the buyer is the subscriber.
 6. A second developer login is untested, to be tested before deployment finishes (reminder in PROGRESS.md).
 7. Supabase free projects pause after a week idle, and both slots go to Staging and Prod. The daily job pings, or use a paid plan.

@@ -3,7 +3,7 @@
 // keys (the BFF side of T-8.1 to T-8.4): order, capture once, new chapter, cancelled and expired orders.
 import type { CookieMethodsServer } from "@supabase/ssr";
 import { afterAll, describe, expect, it } from "vitest";
-import { createPurchase, createSend, newBrief, plainNew, readNew, sendCategory, sendReason, settle, settleWaiting, suggestSends } from "@/lib/action";
+import { createPurchase, createSend, newBrief, plainNew, readNew, sendAmount, sendCategory, sendReason, settle, settleWaiting, suggestSends } from "@/lib/action";
 import { importAccount, leaveOutMadeInSoul, MADE_IN_SOUL, sortRows, type Sorted, type Store } from "@/lib/import";
 import type { AskJson } from "@/lib/llm";
 import { PayPalError, type NewOrder, type Orders, type PayPalOrder, type PayPalTxn } from "@/lib/paypal";
@@ -230,19 +230,23 @@ describe("send money suggestions (T-9.1)", () => {
   const ch = (id: string, ids: string[]): Ch => ({ id, claims: [{ paymentIds: ids }] });
   const names = () => ["Weekly groceries"];
 
-  it("goes under the newest chapter with the support payments, once per belief, and not after it's sent", () => {
+  it("goes under the newest chapter with the support payments, once per belief, and stays after a send (U18)", () => {
     const chapters = [ch("new", ["x"]), ch("week2", ["g2", "c1"]), ch("week1", ["g1"])];
     const mum = { id: "b1", who: "your mum", paymentIds: ["g1", "g2"] };
-    const out = suggestSends(chapters, [mum], names, new Set());
+    const out = suggestSends(chapters, [mum], names);
     expect(out.map((c) => c.suggest?.label ?? null)).toEqual([null, "Review the Payment", null]);
     expect(out[1].suggest).toEqual({
-      text: "You told me Weekly groceries are for your mum. Want to send your mum $25.00 towards the next one?",
+      text: "You told me Weekly groceries are for your mum. Want to send your mum some money towards the next one?",
       label: "Review the Payment",
       href: "/action/confirm?belief=b1",
     });
     expect(chapters[1]).not.toHaveProperty("suggest"); // the saved chapters aren't changed
-    expect(suggestSends(chapters, [mum], names, new Set(["b1"])).every((c) => !c.suggest)).toBe(true);
-    expect(suggestSends(chapters, [{ ...mum, paymentIds: ["gone"] }], names, new Set()).every((c) => !c.suggest)).toBe(true);
+    expect(suggestSends(chapters, [{ ...mum, paymentIds: ["gone"] }], names).every((c) => !c.suggest)).toBe(true);
+  });
+
+  it("takes the amount the person picked, from $1.00 to $100.00 with at most 2 decimals", () => {
+    expect(["80", "80.5", "$37.50", " 1 ", 100, "25.00"].map(sendAmount)).toEqual(["80.00", "80.50", "37.50", "1.00", "100.00", "25.00"]);
+    expect(["0.99", "100.01", "1e2", "-5", "12.345", "", "abc", null, undefined, Infinity].map(sendAmount)).toEqual(Array(10).fill(null));
   });
 
   it("says why in the person's own terms, and files the send as support", () => {
@@ -305,6 +309,12 @@ describe("send money on Staging", () => {
     expect(paypal.made.get(a.paypal_order_id!)).toMatchObject({ amount: "25.00", payeeEmail: "mum@personal.example.com", name: "Towards Weekly groceries" });
     expect((await createSend(admin, id, account, support, ["Weekly groceries"], "mum@personal.example.com", "http://localhost:3000", paypal.api)).id).toBe(a.id);
     expect(paypal.calls.create).toBe(1);
+    // U18: a different amount the person picked is its own order, for that amount.
+    const big = await createSend(admin, id, account, support, ["Weekly groceries"], "mum@personal.example.com", "http://localhost:3000", paypal.api, "80.00");
+    expect(big.id).not.toBe(a.id);
+    expect(paypal.made.get(big.paypal_order_id!)).toMatchObject({ amount: "80.00" });
+    await admin.from("action").update({ status: "cancelled" }).eq("id", big.id); // the rest of this test settles the $25.00 one
+    paypal.calls.create = 1;
 
     paypal.approve(a.paypal_order_id!);
     const done = await settle(admin, a, paypal.api, sendAsk);

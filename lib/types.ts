@@ -21,3 +21,5 @@ export type Memory = {
   oneOff?: boolean; // a one-time thing the person kept apart from the pattern (U17)
 };
 export type Change = { id: string; claimId: string; before: string; after: string; notes: string[]; canUndo: boolean };
+/** The I Noticed card (U18): code's sentence and question about one unusual payment, and the payments compared. */
+export type Notice = { chapterId: string; claimId: string; paymentId: string; sentence: string; question: string; paymentIds: string[] };

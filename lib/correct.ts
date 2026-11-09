@@ -6,8 +6,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CATEGORY_LINES, categoryLabel, isCategory, paymentName, type Category } from "@/lib/categories";
 import type { AskJson } from "@/lib/llm";
-import { applyTold, isOneOff, loadPayments, loadStopped, loadTold, must, ONE_OFF, saveChapters, saveHabits, writeChapters, type Told, type WrittenChapter, type WrittenClaim } from "@/lib/story";
-import { totals, weekOf, type StoryPayment } from "@/lib/totals";
+import { noticeText } from "@/lib/notice";
+import { applyTold, isOneOff, loadPayments, loadStopped, loadTold, must, ONE_OFF, saveChapters, saveHabits, UNUSUAL, writeChapters, type Told, type WrittenChapter, type WrittenClaim } from "@/lib/story";
+import { totals, unusual, weekOf, type StoryPayment } from "@/lib/totals";
 
 export const MAX_SAID = 300;
 /** The one question Soul asks when a correction needs a person and names nobody (AC-5.3). */
@@ -21,6 +22,7 @@ const FAILED = "I couldn't rewrite the chapter just now, so nothing changed. Try
 const LOST = "I can't find that sentence any more. Refresh the story and try again.";
 const NO_UNDO = "That change can't be undone any more. Refresh the story to see where it stands.";
 const UNDO_FAILED = "I couldn't undo that just now, so it still stands. Try again in a moment.";
+export const ANSWERED = "You already told me about that payment. Refresh the story to see where it stands.";
 const error = (message: string): Result => ({ status: "error", message });
 const money = (n: number) => `$${n.toFixed(2)}`;
 const short = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -162,7 +164,7 @@ const BELIEF_BEFORE = "id, kind, key, text, who, category, sureness, source, pay
 type ClaimBefore = { position: number; text: string; payment_ids: string[]; belief_id: string | null; rewritten: boolean };
 type ChapterBefore = { week: string; title: string; starts_on: string; ends_on: string; payment_ids: string[]; claim: ClaimBefore[] };
 /** What Undo puts back (U12): the beliefs and chapters as they were, and the belief this correction made, if any. */
-export type UndoPoint = { created: string | null; weeks: string[]; beliefs: ({ id: string } & Record<string, unknown>)[]; chapters: ChapterBefore[] };
+export type UndoPoint = { created: string | null; asked?: string; weeks: string[]; beliefs: ({ id: string } & Record<string, unknown>)[]; chapters: ChapterBefore[] };
 
 /** The told beliefs a change takes payments from, which Undo has to give back. */
 export const movedIds = (told: Told[], next: Told[]) => told.filter((t) => next.find((n) => n.id === t.id)?.paymentIds.length !== t.paymentIds.length).map((t) => t.id);
@@ -210,36 +212,51 @@ export async function saveCorrection(
 }
 
 type ClaimRow = { id: string; text: string; payment_ids: string[]; belief_id: string | null; chapter: { week: string | null; title: string; claim: { text: string }[] } };
+const CLAIM = "id, text, payment_ids, belief_id, chapter!inner(week, title, account_id, claim(text))";
 
-/** POST /api/correct: reads the correction, asks who when needed, then saves it and rewrites the chapter. */
-export async function correct(db: SupabaseClient, personId: string, accountId: string, input: { claimId: string; said: string; answer?: string }, ask: AskJson): Promise<Result> {
+/** The sentence of the payment's week chapter that cites it, else that chapter's first sentence, or null. */
+async function weekClaim(db: SupabaseClient, accountId: string, paymentId: string): Promise<ClaimRow | null> {
+  const { data: p } = await db.from("payment").select("occurred_at").eq("id", paymentId).eq("account_id", accountId).maybeSingle();
+  if (!p) return null;
+  const rows = await must(db.from("claim").select(`${CLAIM}, position`).eq("chapter.account_id", accountId).eq("chapter.week", weekOf(p.occurred_at)).order("position"));
+  const claims = rows as unknown as ClaimRow[];
+  return claims.find((c) => c.payment_ids.includes(paymentId)) ?? claims[0] ?? null;
+}
+
+/**
+ * POST /api/correct: reads the correction, asks who when needed, then saves it and rewrites the chapter.
+ * With `paymentId` it answers the I Noticed card (U18): the correction is about that one payment, set against
+ * the earlier ones it was compared with, so "it was a birthday gift" keeps it apart as a one-off (U17).
+ */
+export async function correct(db: SupabaseClient, personId: string, accountId: string, input: { claimId: string; said: string; answer?: string; paymentId?: string }, ask: AskJson): Promise<Result> {
   const said = clip(input.said, MAX_SAID + 1);
   if (!said) return error("Tell me what's actually true first.");
   if (said.length > MAX_SAID) return error(`Keep it under ${MAX_SAID} characters.`);
-  const { data } = await db
-    .from("claim")
-    .select("id, text, payment_ids, belief_id, chapter!inner(week, title, account_id, claim(text))")
-    .eq("id", input.claimId)
-    .eq("chapter.account_id", accountId)
-    .maybeSingle();
-  const claim = data as ClaimRow | null;
+  const { data } = await db.from("claim").select(CLAIM).eq("id", input.claimId).eq("chapter.account_id", accountId).maybeSingle();
+  // From the I Noticed card (U18): the week chapter that holds the payment, even if a sync rewrote it since
+  // the page loaded, or the card was under the payment's own New chapter, which has no week to rewrite.
+  const claim = input.paymentId && !(data as ClaimRow | null)?.chapter.week ? await weekClaim(db, accountId, input.paymentId) : (data as ClaimRow | null);
   const week = claim?.chapter.week;
   if (!claim || !week) return error(LOST);
 
   const [all, told, stopped] = await Promise.all([loadPayments(db, accountId), loadTold(db, accountId), loadStopped(db, accountId)]);
   const before = applyTold(all, told);
-  const pays = before.filter((p) => claim.payment_ids.includes(p.id));
+  const odd = input.paymentId ? unusual(before).find((u) => u.payment.id === input.paymentId) : undefined;
+  if (input.paymentId && !odd) return error(ANSWERED);
+  const pays = odd ? [odd.payment] : before.filter((p) => claim.payment_ids.includes(p.id));
   let reading: Reading;
   try {
-    reading = await interpret(said, claim.text, pays, ask, input.answer);
+    reading = await interpret(said, odd ? noticeText(odd).sentence : claim.text, pays, ask, input.answer);
   } catch (e) {
     console.error("correction failed", e);
     return error(FAILED);
   }
+  // The card's payment was already for someone, so "it was her birthday" needs no question.
+  if (reading.needsWho && odd?.who) reading = { ...reading, who: odd.who, needsWho: false };
   if (reading.needsWho) return { status: "ask", ...WHO_QUESTION };
 
   // The new belief: a one-off of its own (U17), or support for the same person growing one belief.
-  const { oneOff, targets, same, add, next } = changeFor(told, reading, pays, said);
+  const { oneOff, targets, same, add, next } = changeFor(told, reading, odd ? [odd.payment, ...odd.earlier] : pays, said);
   const key = add.key;
   const after = applyTold(all, next);
 
@@ -261,6 +278,8 @@ export async function correct(db: SupabaseClient, personId: string, accountId: s
     : await must(db.from("belief").insert({ person_id: personId, account_id: accountId, ...row }).select("id").single());
   await saveMoved(db, told, next, same?.id);
   if (oneOff) await saveHabits(db, personId, accountId, after); // a habit's days and payments leave the one-off out
+  // The card's question is answered, whatever the answer was, so it doesn't come back. Undo takes it away.
+  const asked = odd ? await askedAbout(db, personId, accountId, odd.payment, `You Told Me, ${short(now)}`) : undefined;
   const kept = told.filter((t) => movedIds(told, next).includes(t.id));
   const names = [...new Set(targets.map(paymentName))].join(" and ");
 
@@ -276,7 +295,7 @@ export async function correct(db: SupabaseClient, personId: string, accountId: s
     targets: reading.paymentIds.filter((id) => add.paymentIds.includes(id)), // less any a one-off keeps
     before,
     after,
-    undo: { ...undo, created: existing ? null : belief.id },
+    undo: { ...undo, created: existing ? null : belief.id, ...(asked ? { asked } : {}) },
   });
   return { status: "done" };
 }
@@ -295,6 +314,28 @@ async function restore(db: SupabaseClient, personId: string, accountId: string, 
     await must(db.from("claim").insert(claim.map((c) => ({ ...c, belief_id: c.belief_id && alive.has(c.belief_id) ? c.belief_id : null, chapter_id: data.id, person_id: personId }))));
   }
   if (u.created) await must(db.from("belief").delete().eq("id", u.created).eq("account_id", accountId));
+  if (u.asked) await must(db.from("belief").delete().eq("id", u.asked).eq("account_id", accountId).eq("kind", "check"));
+}
+
+/**
+ * Marks an unusual payment as answered (U18): a `check` belief keyed by the payment, never listed on Memory.
+ * Returns its ID. A second answer for the same payment keeps the first.
+ */
+export async function askedAbout(db: SupabaseClient, personId: string, accountId: string, p: StoryPayment, source: string) {
+  const key = `${UNUSUAL}${p.id}`;
+  const row = { person_id: personId, account_id: accountId, kind: "check", key, text: `You answered my question about ${paymentName(p)} on ${short(p.occurred_at)}.`, sureness: "sure", source, payment_ids: [p.id], told_at: new Date().toISOString() };
+  const { data, error: e } = await db.from("belief").upsert(row, { onConflict: "person_id,account_id,key", ignoreDuplicates: true }).select("id");
+  if (e) throw e;
+  return (data?.[0]?.id as string | undefined) ?? (await must(db.from("belief").select("id").eq("account_id", accountId).eq("key", key).single())).id;
+}
+
+/** Same as Usual on the I Noticed card (AC-18.4): nothing is rewritten, and Soul never asks about that payment again. */
+export async function sameAsUsual(db: SupabaseClient, personId: string, accountId: string, paymentId: string): Promise<Result> {
+  const [all, told] = await Promise.all([loadPayments(db, accountId), loadTold(db, accountId)]);
+  const odd = unusual(applyTold(all, told)).find((u) => u.payment.id === paymentId);
+  if (!odd) return error(ANSWERED);
+  await askedAbout(db, personId, accountId, odd.payment, `You Said Same as Usual, ${short(new Date().toISOString())}`);
+  return { status: "done" };
 }
 
 /**

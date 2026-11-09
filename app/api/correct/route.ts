@@ -7,11 +7,11 @@ const NO_DATA = { status: "error", message: "Choose the data to read first." };
 
 // That's Not Right: the correction, a clarifying question when it names nobody, then the rewritten chapter.
 export async function POST(req: Request) {
-  const { claimId, text, who } = await req.json().catch(() => ({}));
+  const { claimId, text, who, paymentId } = await req.json().catch(() => ({}));
   const db = await requestDb();
   const v = await currentVisitor(db);
   if (!v?.accountId) return Response.json(NO_DATA, { status: 409 });
-  const r = await correct(db, v.id, v.accountId, { claimId: String(claimId ?? ""), said: String(text ?? ""), answer: typeof who === "string" ? who : undefined }, askJson);
+  const r = await correct(db, v.id, v.accountId, { claimId: String(claimId ?? ""), said: String(text ?? ""), answer: typeof who === "string" ? who : undefined, paymentId: typeof paymentId === "string" ? paymentId : undefined }, askJson);
   return Response.json(r, { status: r.status === "error" ? 422 : 200 });
 }
 

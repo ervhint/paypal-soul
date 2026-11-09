@@ -88,8 +88,8 @@ describe("the functions", () => {
     expect(r.data.found).toEqual([{ name: "Bus fare", firstSeen: "Nov 2", payments: 2, spent: "$4.80" }]);
   });
 
-  it("find_unusual: much bigger than the usual for that name", async () => {
-    expect((await run("find_unusual")).data.found).toEqual([{ name: "Morning coffee", date: "Oct 26", amount: "$12.00", usual: "$4.50" }]);
+  it("find_unusual: the story's rule needs 3 earlier payments, so the Oct 26 coffee after one isn't unusual", async () => {
+    expect((await run("find_unusual")).data.found).toEqual([]); // tests/unusual.test.ts covers the rule (T-18.6)
   });
 
   it("find_duplicates: same name, amount and day", async () => {

@@ -6,7 +6,7 @@ import { post, useApi } from "@/lib/use-api";
 import { Empty, PaymentRow, Sheet, Skeleton, Toast, money, useToast } from "@/components/ui";
 import { titleCase } from "@/lib/title-case";
 import type { Action } from "@/lib/action";
-import type { Chapter, Change, Claim, LeftOut, Memory, Payment } from "@/lib/types";
+import type { Chapter, Change, Claim, LeftOut, Memory, Notice, Payment } from "@/lib/types";
 
 type Story = {
   chapters: Chapter[];
@@ -15,6 +15,7 @@ type Story = {
   actions: Action[];
   memory: Memory[];
   change: Change | null;
+  notice: Notice | null;
   summary: { payments: number; spent: number; habits: number; checks: number };
   source?: "prepared" | "own" | null;
   syncedThrough: string | null;
@@ -33,6 +34,7 @@ function StoryView() {
   const [text, setText] = useState("");
   const [question, setQuestion] = useState<{ question: string; options: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState<Notice | null>(null); // the sheet was opened from the I Noticed card (U18)
   const [seen, setSeen] = useState(false);
   const [missing, setMissing] = useState(false);
   const [older, setOlder] = useState(false);
@@ -75,6 +77,7 @@ function StoryView() {
 
   const close = useCallback(() => {
     setClaim(null);
+    setAsking(null);
     setStep("evidence");
     setText("");
     setQuestion(null);
@@ -83,7 +86,7 @@ function StoryView() {
   const submit = async (who?: string) => {
     if (!claim) return;
     setBusy(true);
-    const r = await post("/api/correct", { claimId: claim.id, text, who })
+    const r = await post("/api/correct", { claimId: claim.id, text, who, paymentId: asking?.paymentId })
       .then((r) => r.json())
       .catch(() => ({ status: "error", message: "I couldn't reach Soul just now. Try again in a moment." }));
     setBusy(false);
@@ -131,6 +134,24 @@ function StoryView() {
   const open = (c: Claim) => {
     setClaim(c);
     setStep("evidence");
+  };
+  // The I Noticed card (U18): the sheet shows that payment and the earlier ones, and asks instead of checking.
+  const { notice } = data;
+  const ask = (n: Notice, at: Step) => {
+    setAsking(n);
+    setClaim({ id: n.claimId, text: n.sentence, paymentIds: n.paymentIds });
+    setStep(at);
+  };
+  // Same as Usual: saved so Soul never asks about it again, and nothing is rewritten.
+  const usual = async (n: Notice) => {
+    setBusy(true);
+    const r = await fetch("/api/story", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paymentId: n.paymentId }) })
+      .then((r) => r.json())
+      .catch(() => null);
+    await reload();
+    setBusy(false);
+    close();
+    toast.show(r?.status === "done" ? "Thanks, I Won't Ask Again" : (r?.message ?? "I Couldn't Save That Just Now"));
   };
   // Looks Right: the belief behind the sentence becomes Sure, and nothing is rewritten.
   const confirm = async () => {
@@ -230,6 +251,18 @@ function StoryView() {
                   </div>
                 </details>
               )}
+            {notice && notice.chapterId === ch.id && (
+              <div className="check-note">
+                <span className="tag plain">I Noticed</span>
+                <h2>{notice.sentence}</h2>
+                <p>{notice.question}</p>
+                <div className="row">
+                  <button className="btn dark small" onClick={() => ask(notice, "evidence")}>Check the Payments</button>
+                  <button className="btn line small" onClick={() => ask(notice, "correct")}>Tell Soul</button>
+                  <button className="btn line small" disabled={busy} onClick={() => usual(notice)}>Same as Usual</button>
+                </div>
+              </div>
+            )}
             {check && checkClaim && i === 0 && (
               <div className="check-note">
                 <span className="tag plain">Not Sure</span>
@@ -276,29 +309,38 @@ function StoryView() {
       <Sheet open={!!claim} onClose={close} title="Payments behind this sentence">
         {claim && step === "evidence" && (
           <>
-            <p className="eyebrow">Why I Wrote This</p>
+            <p className="eyebrow">{asking ? "Why I’m Asking" : "Why I Wrote This"}</p>
             <h2>{claim.text}</h2>
             <p className="why">
-              {pays(claim).length === 1 ? "One payment says so." : `${pays(claim).length} payments say so.`}{" "}
-              {data.memory.find((m) => m.id === claim.belief)?.sure === "Not Sure" ? "I'm not sure yet, so I'd like you to check." : ""}
+              {asking
+                ? `This payment comes first, then the ${pays(claim).length - 1} earlier ones I compared it with. ${asking.question}`
+                : pays(claim).length === 1 ? "One payment says so." : `${pays(claim).length} payments say so.`}{" "}
+              {!asking && data.memory.find((m) => m.id === claim.belief)?.sure === "Not Sure" ? "I'm not sure yet, so I'd like you to check." : ""}
             </p>
             <ul className="pays">{pays(claim).map((p) => <PaymentRow key={p.id} p={p} />)}</ul>
             <p className="note"><button className="link" style={{ fontSize: 13.5 }} onClick={() => { close(); setMissing(true); }}>Why Are Some Rows Missing?</button></p>
-            <div className="actions">
-              <button className="btn" disabled={busy} onClick={confirm}>Looks Right</button>
-              <button className="btn dark" onClick={() => setStep("correct")}>That&rsquo;s Not Right</button>
-            </div>
+            {asking ? (
+              <div className="actions">
+                <button className="btn" onClick={() => setStep("correct")}>Tell Soul</button>
+                <button className="btn dark" disabled={busy} onClick={() => usual(asking)}>Same as Usual</button>
+              </div>
+            ) : (
+              <div className="actions">
+                <button className="btn" disabled={busy} onClick={confirm}>Looks Right</button>
+                <button className="btn dark" onClick={() => setStep("correct")}>That&rsquo;s Not Right</button>
+              </div>
+            )}
           </>
         )}
         {claim && step === "correct" && (
           <>
-            <p className="eyebrow">Correct Me</p>
-            <h2>What&rsquo;s Actually True?</h2>
-            <p className="why">Say it your way. I&rsquo;ll rewrite the chapter and tell you what changed.</p>
-            <textarea className="field" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Those groceries are for my mum" aria-label="Your correction" autoFocus />
+            <p className="eyebrow">{asking ? "Tell Soul" : "Correct Me"}</p>
+            <h2>{asking ? "What Was This Payment For?" : <>What&rsquo;s Actually True?</>}</h2>
+            <p className="why">{asking ? `${asking.sentence} ` : ""}Say it your way. I&rsquo;ll rewrite the chapter and tell you what changed.</p>
+            <textarea className="field" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={asking ? "It was a birthday gift" : "Those groceries are for my mum"} aria-label="Your correction" autoFocus />
             <div className="actions">
               <button className="btn" disabled={busy || !text.trim()} onClick={() => submit()}>{busy ? "Rewriting…" : "Rewrite the Chapter"}</button>
-              <button className="btn dark" onClick={() => setStep("evidence")}>Back</button>
+              <button className="btn dark" onClick={() => setStep("evidence")}>{asking ? "See the Payments" : "Back"}</button>
             </div>
           </>
         )}

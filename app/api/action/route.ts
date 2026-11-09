@@ -1,4 +1,4 @@
-import { ACTION_COLUMNS, actionView, createPurchase, createSend, loadSupport, SEND, sendReason, settle, type ActionRow } from "@/lib/action";
+import { ACTION_COLUMNS, actionView, createPurchase, createSend, loadSupport, SEND, sendAmount, sendReason, settle, type ActionRow } from "@/lib/action";
 import { paymentName } from "@/lib/categories";
 import { askJson } from "@/lib/llm";
 import { PayPalError, paypalOrders } from "@/lib/paypal";
@@ -40,7 +40,7 @@ export async function GET(req: Request) {
     const v = await currentVisitor(db);
     const b = v?.accountId && UUID.test(belief) ? await loadSupport(db, v.accountId, belief) : null;
     if (!b) return Response.json(null);
-    return Response.json({ belief: b.id, who: b.who, amount: Number(SEND.amount), reason: sendReason(b.who, await namesOf(b.paymentIds)), testEmail: testEmail() });
+    return Response.json({ belief: b.id, who: b.who, amount: Number(SEND.amount), min: SEND.min, max: SEND.max, reason: sendReason(b.who, await namesOf(b.paymentIds)), testEmail: testEmail() });
   }
   const id = q.get("id") ?? "";
   if (!UUID.test(id)) return Response.json(null);
@@ -49,10 +49,11 @@ export async function GET(req: Request) {
 
 const failed = (reason: string, status = 502) => Response.json({ ok: false, reason }, { status });
 
-// Makes the sandbox order: Buy Something Small, or send money for a support belief. Amounts and items are
-// fixed here, never taken from the page; the page only picks the belief and the sandbox account paid.
+// Makes the sandbox order: Buy Something Small, or send money for a support belief. The purchase is fixed
+// here. For a send the page picks the belief, the sandbox account paid and the amount, which is checked
+// here ($1.00 to $100.00); the person approves it on PayPal with their own sandbox login.
 export async function POST(req: Request) {
-  const { kind, belief, to } = (await req.json()) as { kind?: string; belief?: string; to?: string };
+  const { kind, belief, to, amount } = (await req.json()) as { kind?: string; belief?: string; to?: string; amount?: unknown };
   const db = await requestDb();
   const v = await currentVisitor(db);
   if (!v?.accountId) return failed("Choose the data to read first.", 409);
@@ -62,8 +63,10 @@ export async function POST(req: Request) {
       const b = typeof belief === "string" && UUID.test(belief) ? await loadSupport(db, v.accountId, belief) : null;
       if (!b) return failed("I can't find what this payment was for any more.", 404);
       const email = to === "test" ? testEmail() : typeof to === "string" ? to.trim().slice(0, 254) : null;
+      const sum = sendAmount(amount);
+      if (!sum) return Response.json({ ok: false, reason: `Choose an amount from $${SEND.min}.00 to $${SEND.max}.00.`, field: "amount" }, { status: 400 });
       if (!email || !EMAIL.test(email)) return failed("Enter a sandbox email.", 400);
-      const a = await createSend(secretClient(), v.id, v.accountId, b, await namesOf(b.paymentIds), email, origin, paypalOrders);
+      const a = await createSend(secretClient(), v.id, v.accountId, b, await namesOf(b.paymentIds), email, origin, paypalOrders, sum);
       return Response.json({ ok: true, id: a.id });
     }
     const a = await createPurchase(secretClient(), v.id, v.accountId, origin, paypalOrders);

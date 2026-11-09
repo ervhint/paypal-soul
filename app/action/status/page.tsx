@@ -19,7 +19,7 @@ function Status() {
 
   useEffect(() => {
     if (data?.status === "completed") router.replace(data.kind === "send" ? `/action/done?id=${data.id}` : "/story");
-    if (data?.status === "failed") router.replace(`/action/failed?kind=${data.kind}&why=declined${data.belief ? `&belief=${data.belief}` : ""}`);
+    if (data?.status === "failed") router.replace(`/action/failed?kind=${data.kind}&why=declined&amount=${data.amount.toFixed(2)}${data.belief ? `&belief=${data.belief}` : ""}`);
   }, [data, router]);
 
   const check = async () => {

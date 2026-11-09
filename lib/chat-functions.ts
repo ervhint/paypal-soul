@@ -7,7 +7,7 @@
 import { CATEGORIES, categoryLabel, paymentName, UNKNOWN_PAYMENT } from "@/lib/categories";
 import { LEFT_OUT_LABELS, MONEY_IN } from "@/lib/import";
 import { clip, money, short } from "@/lib/story";
-import { dayOf, repeats, weekOf, type StoryPayment, type Sureness } from "@/lib/totals";
+import { dayOf, repeats, unusual, weekOf, type StoryPayment, type Sureness } from "@/lib/totals";
 
 const DAY = 86_400_000;
 const YEAR_DAYS = 365;
@@ -241,18 +241,20 @@ export const FUNCTIONS: Record<string, Fn> = {
     },
   },
   find_unusual: {
-    description: "Payments much bigger than the usual amount for that name.",
+    description: "Payments much bigger than the usual amount for that name, or for that person when it was for someone.",
     params: FILTER,
     step: checking,
     run(a, l, f) {
+      // The story's rule (AC-18.6): one-offs and payments the person already explained are left out.
       const kept = new Set(select(l, a).map((p) => p.id));
-      const found = groups(spending(l.payments), paymentName).flatMap(([name, ps]) => {
-        if (ps.length < 3 || name === UNKNOWN_PAYMENT) return [];
-        const usual = median(ps.map((p) => p.amount));
-        return ps.filter((p) => p.amount >= usual * 2 && kept.has(p.id)).map((p) => ({ p, usual }));
-      });
-      const odd = found.map((o) => o.p);
-      return { label: labelled("payments much bigger than usual", a, l), data: { found: found.map(({ p, usual }) => ({ name: paymentName(p), date: when(p), amount: f.of(p.amount, [p]), usual: f.of(usual, [p]) })) }, behind: odd, rows: odd };
+      const found = unusual(l.payments).filter((u) => kept.has(u.payment.id));
+      const odd = found.map((u) => u.payment);
+      return {
+        label: labelled("payments much bigger than usual", a, l),
+        data: { found: found.map((u) => ({ name: u.name, ...(u.who ? { for: u.who } : {}), date: when(u.payment), amount: f.of(u.payment.amount, [u.payment]), usual: f.of(u.usual, u.earlier) })) },
+        behind: odd,
+        rows: odd,
+      };
     },
   },
   find_duplicates: {

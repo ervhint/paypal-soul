@@ -26,13 +26,13 @@ export async function readMemory(db: SupabaseClient, accountId: string) {
   const [all, told, beliefs] = await Promise.all([
     loadPayments(db, accountId),
     loadTold(db, accountId),
-    must(db.from("belief").select(BELIEF_COLUMNS).eq("account_id", accountId).order("created_at")),
+    must(db.from("belief").select(BELIEF_COLUMNS).eq("account_id", accountId).neq("kind", "check").order("created_at")), // a Same as Usual answer isn't listed (AC-18.4)
   ]);
   return { memory: beliefs.map(beliefView), payments: applyTold(all, told).map(paymentView).reverse() };
 }
 
 const loadBelief = async (db: SupabaseClient, accountId: string, id: string) =>
-  (await db.from("belief").select("id, kind, key, text, who, category, payment_ids, active").eq("id", id).eq("account_id", accountId).maybeSingle()).data as Row | null;
+  (await db.from("belief").select("id, kind, key, text, who, category, payment_ids, active").eq("id", id).eq("account_id", accountId).neq("kind", "check").maybeSingle()).data as Row | null;
 
 /** Writes every week with these payments, newest first, or null unless all of them worked. */
 async function rewrite(ids: string[], after: StoryPayment[], ask: AskJson, told: Told[], stopped: string[]) {

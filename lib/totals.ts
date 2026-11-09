@@ -14,6 +14,7 @@ export type StoryPayment = {
   category: string | null;
   for_who?: string | null; // someone else the person said it was for (U5), so it isn't spending on them
   one_off?: boolean; // the person said it was a one-time thing (U17), so it's no part of a pattern
+  explained?: boolean; // the person answered Soul's question about it being unusual (U18)
 };
 export type Sureness = "not_sure" | "fairly_sure" | "sure";
 export type Repeat = {
@@ -111,6 +112,41 @@ export function interests(pays: StoryPayment[], stopped: string[] = []): Interes
   }
   return out.sort((a, b) => b.days - a.days || b.spent - a.spent);
 }
+
+/** A payment much bigger than the usual for its name, or for its person when it was for someone (U18). */
+export type Unusual = { payment: StoryPayment; usual: number; earlier: StoryPayment[]; who: string | null; name: string };
+
+/** What a payment is compared with: the person it was for, or else its name. A payment Soul can't identify has none. */
+const usualKey = (p: StoryPayment) => (p.for_who ? `who:${p.for_who.toLowerCase()}` : paymentName(p) === UNKNOWN_PAYMENT ? null : `name:${p.name!.trim().toLowerCase().replace(/\s+/g, " ")}`);
+
+/**
+ * AC-18.1: a spending payment is unusual when its name, or its person for support, has at least 3 earlier
+ * payments and it's at least 1.5 times their median and at least $5 more. One-offs (U17) and payments the
+ * person already explained are left out of both sides. Oldest first. Chat and the story both use this.
+ */
+export function unusual(pays: StoryPayment[]): Unusual[] {
+  const kept = pays.filter((p) => p.amount > 0 && !p.one_off && !p.explained).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
+  const seen = new Map<string, StoryPayment[]>();
+  const out: Unusual[] = [];
+  for (const p of kept) {
+    const key = usualKey(p);
+    if (!key) continue;
+    const earlier = seen.get(key) ?? [];
+    if (earlier.length >= 3) {
+      const usual = median(earlier.map((e) => cents(e.amount)));
+      if (cents(p.amount) * 2 >= usual * 3 && cents(p.amount) - usual >= 500) out.push({ payment: p, usual: usual / 100, earlier: [...earlier], who: p.for_who ?? null, name: paymentName(p) });
+    }
+    seen.set(key, [...earlier, p]);
+  }
+  return out;
+}
+
+/** The middle value, or the mean of the two middle ones, rounded to a whole number. */
+const median = (ns: number[]) => {
+  const s = [...ns].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+};
 
 /**
  * Counts and sums for a set of payments. Money received (negative amounts) isn't spending, and what the

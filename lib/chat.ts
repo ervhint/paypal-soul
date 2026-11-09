@@ -305,7 +305,7 @@ export function chatStore(db: SupabaseClient, personId: string, accountId: strin
       return applyTold(all, told);
     },
     async beliefs() {
-      const rows = await must(db.from("belief").select("kind, text, sureness, told_at, payment_ids").eq("account_id", accountId).eq("active", true).order("created_at"));
+      const rows = await must(db.from("belief").select("kind, text, sureness, told_at, payment_ids").eq("account_id", accountId).eq("active", true).neq("kind", "check").order("created_at"));
       return rows.map((b) => ({ kind: b.kind, text: b.text, sureness: b.sureness, checked: !!b.told_at, paymentIds: b.payment_ids }));
     },
     stopped: () => loadStopped(db, accountId),

@@ -8,9 +8,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { categoryLabel, categoryView, paymentName } from "@/lib/categories";
 import type { AskJson } from "@/lib/llm";
-import type { Change, Chapter, Memory, Payment } from "@/lib/types";
+import { noticeFor } from "@/lib/notice";
+import type { Change, Chapter, Memory, Notice, Payment } from "@/lib/types";
 import { titleCase } from "@/lib/title-case";
-import { INTEREST, interests, repeats, totals, weekOf, type Interest, type Repeat, type StoryPayment, type Sureness } from "@/lib/totals";
+import { INTEREST, interests, repeats, totals, unusual, weekOf, type Interest, type Repeat, type StoryPayment, type Sureness } from "@/lib/totals";
 
 export type WrittenClaim = { text: string; paymentIds: string[]; habit: string | null; interest?: string | null };
 export type WrittenChapter = { week: string; title: string; startsOn: string; endsOn: string; paymentIds: string[]; claims: WrittenClaim[] };
@@ -55,6 +56,7 @@ export function briefFor(weeks: string[], all: StoryPayment[], told: Told[] = []
   const ref = (p: StoryPayment) => refs.get(p.id) ?? (refs.set(p.id, `p${refs.size + 1}`), refs.get(p.id)!);
   const habitRefs = new Map<string, Repeat>(); // h1… → repeat
   const interestRefs = new Map<string, Interest>(); // i1… → interest
+  const odd = unusual(all); // U18: much bigger than usual, with one-offs and explained payments left out
   const weekBriefs = weeks.map((week) => {
     const inWeek = all.filter((p) => weekOf(p.occurred_at) === week);
     const before = all.filter((p) => weekOf(p.occurred_at) < week);
@@ -78,6 +80,9 @@ export function briefFor(weeks: string[], all: StoryPayment[], told: Told[] = []
         interestRefs.set(r, i);
         return { ref: r, category: i.category, days: i.days, payments: i.payments, spent: money(i.spent), sureness: i.sureness, paymentRefs: all.filter((p) => i.paymentIds.includes(p.id)).map(ref) };
       });
+    const bigger = odd
+      .filter((u) => weekOf(u.payment.occurred_at) === week)
+      .map((u) => ({ paymentRef: ref(u.payment), amount: money(u.payment.amount), usual: money(u.usual), ...(u.who ? { for: u.who } : { name: u.name }), earlierRefs: u.earlier.map(ref) }));
     const toldYou = told
       .map((b) => ({ said: b.text, paymentRefs: inWeek.filter((p) => b.paymentIds.includes(p.id)).map(ref), ...(isOneOff(b) ? { oneOff: true } : {}) }))
       .filter((b) => b.paymentRefs.length);
@@ -96,6 +101,7 @@ export function briefFor(weeks: string[], all: StoryPayment[], told: Told[] = []
       repeats: habits,
       ...(liked.length ? { interests: liked } : {}),
       ...(toldYou.length ? { toldYou } : {}),
+      ...(bigger.length ? { unusual: bigger } : {}),
       paymentRefs,
     };
   });
@@ -121,6 +127,7 @@ Rules:
 - Title: 2 to 6 words in Title Case, about what you noticed.
 - When a sentence is about a repeat, set "habit" to its ref and match its sureness: not_sure → "I think", fairly_sure → "it looks like", sure → say it plainly. A repeat that is not_a_habit has only been seen a few times: say plainly what happened, with no "I think" or "it looks like", and never call it a habit.
 - "interests" are kinds of things they keep choosing to spend on. At most one sentence per chapter may name one, as what they seem to enjoy, using its category in plain words. Set "interest" to its ref, cite its paymentRefs, and match its sureness the same way. Never say why they like it.
+- "unusual" lists payments much bigger than the usual amount for that name or person. You may say one plainly with its amount and "usual", e.g. "Your Nov 4 payment for your mum was $80.00, more than the usual $25.00.", citing its paymentRef and earlierRefs. Never guess or suggest why it was bigger.
 - A payment named "a payment I can't identify" stays that. Never guess what any payment was, who it was for or why, beyond what the data says.`;
 
 /** Amounts written as $12.34 in a sentence, in cents. */
@@ -136,9 +143,10 @@ export function readChapters(answer: string, brief: ReturnType<typeof briefFor>,
     if (!ch) continue;
     const habits = new Map(w.repeats.map((h) => [h.ref, h]));
     const liked = w.interests ?? [];
-    const allowed = new Set([...w.paymentRefs, ...w.repeats.flatMap((h) => h.paymentRefs), ...liked.flatMap((i) => i.paymentRefs)]);
+    const odd = w.unusual ?? [];
+    const allowed = new Set([...w.paymentRefs, ...w.repeats.flatMap((h) => h.paymentRefs), ...liked.flatMap((i) => i.paymentRefs), ...odd.flatMap((u) => u.earlierRefs)]);
     // Every amount code gave for this week: payment amounts and the figures.
-    const figures = new Set(amountsIn(JSON.stringify({ f: w.figures, r: w.repeats, i: liked, p: brief.data.payments.filter((p) => allowed.has(p.ref)) })));
+    const figures = new Set(amountsIn(JSON.stringify({ f: w.figures, r: w.repeats, i: liked, u: odd, p: brief.data.payments.filter((p) => allowed.has(p.ref)) })));
     const claims: WrittenClaim[] = [];
     for (const c of (Array.isArray(ch.claims) ? ch.claims : []).slice(0, 6)) {
       const text = clip(c.text, 280);
@@ -233,10 +241,17 @@ export const must = async <T>(q: PromiseLike<{ data: T; error: { code?: string }
 export async function loadPayments(db: SupabaseClient, accountId: string, personId?: string): Promise<StoryPayment[]> {
   let q = db.from("payment").select("id, paypal_txn_id, occurred_at, amount, currency, name, payee, event_code, category, for_who").eq("account_id", accountId);
   if (personId) q = q.or(`person_id.is.null,person_id.eq.${personId}`);
+  // Payments the person answered Soul's question about (U18): a `check` belief keyed by the payment.
+  let c = db.from("belief").select("key").eq("account_id", accountId).eq("kind", "check").like("key", `${UNUSUAL}%`);
+  if (personId) c = c.eq("person_id", personId);
   // Newest first, so a very long history loses its oldest payments, not its latest. Handed back oldest first.
-  const rows = await must(q.order("occurred_at", { ascending: false }).limit(2000));
-  return rows.reverse().map((r) => ({ ...r, amount: Number(r.amount) }));
+  const [rows, checks] = await Promise.all([must(q.order("occurred_at", { ascending: false }).limit(2000)), must(c)]);
+  const explained = new Set(checks.map((b) => (b.key as string).slice(UNUSUAL.length)));
+  return rows.reverse().map((r) => ({ ...r, amount: Number(r.amount), ...(explained.has(r.id) ? { explained: true } : {}) }));
 }
+
+/** The start of the key of a `check` belief: the person answered the question about that payment (U18). */
+export const UNUSUAL = "unusual:";
 
 /** This person's active told beliefs, oldest change first, so applying them in order lets the newest win. */
 export async function loadTold(db: SupabaseClient, accountId: string, personId?: string): Promise<Told[]> {
@@ -361,8 +376,8 @@ export async function readStory(db: SupabaseClient, accountId: string) {
   const [raw, told, chapters, beliefs, corrections] = await Promise.all([
     loadPayments(db, accountId),
     loadTold(db, accountId),
-    must(db.from("chapter").select("id, title, starts_on, ends_on, is_new, suggestion, claim(id, position, text, payment_ids, belief_id, rewritten)").eq("account_id", accountId).order("ends_on", { ascending: false }).order("is_new", { ascending: false }).order("created_at", { ascending: false })),
-    must(db.from("belief").select(BELIEF_COLUMNS).eq("account_id", accountId).eq("active", true).order("created_at")),
+    must(db.from("chapter").select("id, week, title, starts_on, ends_on, is_new, suggestion, payment_ids, claim(id, position, text, payment_ids, belief_id, rewritten)").eq("account_id", accountId).order("ends_on", { ascending: false }).order("is_new", { ascending: false }).order("created_at", { ascending: false })),
+    must(db.from("belief").select(BELIEF_COLUMNS).eq("account_id", accountId).eq("active", true).neq("kind", "check").order("created_at")),
     must(db.from("correction").select("id, claim_id, claim_before, claim_after, notes, undo").eq("account_id", accountId).is("seen_at", null).is("undone_at", null).not("claim_id", "is", null).order("created_at", { ascending: false }).limit(1)),
   ]);
   const all = applyTold(raw, told);
@@ -381,16 +396,19 @@ export async function readStory(db: SupabaseClient, accountId: string) {
       .map((k) => ({ id: k.id, text: k.text, paymentIds: k.payment_ids, belief: k.belief_id ?? undefined, rewritten: k.rewritten })),
   }));
   const memory = beliefs.map(beliefView);
+  // U18: the newest chapter with an unusual payment the person hasn't explained asks about it.
+  const notice: Notice | null = noticeFor(story.map((c, i) => ({ ...c, week: chapters[i].week as string | null, paymentIds: chapters[i].payment_ids as string[] })), unusual(all));
   return {
     chapters: story,
     payments,
     memory,
     change,
+    notice,
     summary: {
       payments: all.length,
       spent: totals(all).onYou,
       habits: beliefs.filter((b) => b.key?.startsWith(HABIT)).length,
-      checks: memory.filter((m) => m.sure === "Not Sure").length,
+      checks: memory.filter((m) => m.sure === "Not Sure").length + (notice ? 1 : 0), // the open question counts too
     },
   };
 }

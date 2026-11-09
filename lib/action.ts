@@ -32,8 +32,19 @@ export type Action = {
 // The name says what was bought, so the categoriser can file it ("Weekend market" alone stayed unknown).
 export const PURCHASE = { name: "Weekend market groceries", payee: "Test Store", amount: "18.00", currency: "USD" } as const;
 
-/** What send money sends, fixed on the server like the purchase. */
-export const SEND = { amount: "25.00", currency: "USD" } as const;
+/** Send money: the amount the page starts with, and the range a person can pick from (U18). */
+export const SEND = { amount: "25.00", currency: "USD", min: 1, max: 100 } as const;
+
+/**
+ * The amount a person picked, as PayPal wants it ("80.00"), or null when it isn't $1.00 to $100.00 with at
+ * most 2 decimals. The person approves every send on PayPal with their own sandbox login.
+ */
+export function sendAmount(asked: unknown): string | null {
+  const s = typeof asked === "number" ? String(asked) : typeof asked === "string" ? asked.trim().replace(/^\$/, "") : "";
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+  const n = Number(s);
+  return n >= SEND.min && n <= SEND.max ? n.toFixed(2) : null;
+}
 
 export type ActionRow = {
   id: string;
@@ -113,15 +124,14 @@ type SuggestChapter = { id: string; claims: { paymentIds: string[] }[]; suggest?
 
 /**
  * Puts a send money suggestion under the newest chapter that tells of each support belief's payments
- * (AC-9.1). A belief already sent for gets none; chapters come newest first.
+ * (AC-9.1). It stays after a send, so the person can send again (U18); chapters come newest first.
  */
-export function suggestSends<C extends SuggestChapter>(chapters: C[], support: Support[], names: (ids: string[]) => string[], sent: Set<string>): C[] {
+export function suggestSends<C extends SuggestChapter>(chapters: C[], support: Support[], names: (ids: string[]) => string[]): C[] {
   const out = chapters.map((c) => ({ ...c }));
   for (const b of support) {
-    if (sent.has(b.id)) continue;
     const ch = out.find((c) => !c.suggest && c.claims.some((k) => k.paymentIds.some((id) => b.paymentIds.includes(id))));
     if (!ch) continue;
-    ch.suggest = { text: `${sendReason(b.who, names(b.paymentIds))} Want to send ${b.who} ${money(Number(SEND.amount))} towards the next one?`, label: "Review the Payment", href: `/action/confirm?belief=${b.id}` };
+    ch.suggest = { text: `${sendReason(b.who, names(b.paymentIds))} Want to send ${b.who} some money towards the next one?`, label: "Review the Payment", href: `/action/confirm?belief=${b.id}` };
   }
   return out;
 }
@@ -130,18 +140,18 @@ export function suggestSends<C extends SuggestChapter>(chapters: C[], support: S
  * Send money: makes the sandbox order paying `payeeEmail`, the account standing in for the belief's
  * person, and returns the waiting action. The same send still waiting is handed back instead.
  */
-export async function createSend(admin: SupabaseClient, personId: string, accountId: string, belief: Support, names: string[], payeeEmail: string, origin: string, orders: Orders) {
+export async function createSend(admin: SupabaseClient, personId: string, accountId: string, belief: Support, names: string[], payeeEmail: string, origin: string, orders: Orders, amount: string = SEND.amount) {
   const open = await must(
-    admin.from("action").select(ACTION_COLUMNS).eq("person_id", personId).eq("account_id", accountId).eq("kind", "send").eq("status", "waiting").eq("belief_id", belief.id).eq("payee_email", payeeEmail).not("paypal_order_id", "is", null).limit(1),
+    admin.from("action").select(ACTION_COLUMNS).eq("person_id", personId).eq("account_id", accountId).eq("kind", "send").eq("status", "waiting").eq("belief_id", belief.id).eq("payee_email", payeeEmail).eq("amount", amount).not("paypal_order_id", "is", null).limit(1),
   );
   if (open.length) return open[0] as ActionRow;
   const a = (await must(
-    admin.from("action").insert({ person_id: personId, account_id: accountId, kind: "send", recipient: belief.who, amount: SEND.amount, currency: SEND.currency, belief_id: belief.id, payee_email: payeeEmail }).select(ACTION_COLUMNS).single(),
+    admin.from("action").insert({ person_id: personId, account_id: accountId, kind: "send", recipient: belief.who, amount, currency: SEND.currency, belief_id: belief.id, payee_email: payeeEmail }).select(ACTION_COLUMNS).single(),
   )) as ActionRow;
   const back = `${origin}/action/status?id=${a.id}`;
   try {
     const name = `Towards ${supportNames(names)}`.slice(0, 120);
-    const order = await orders.create({ requestId: a.id, amount: SEND.amount, currency: SEND.currency, name, customId: a.id, returnUrl: back, cancelUrl: `${back}&cancelled=1`, payeeEmail });
+    const order = await orders.create({ requestId: a.id, amount, currency: SEND.currency, name, customId: a.id, returnUrl: back, cancelUrl: `${back}&cancelled=1`, payeeEmail });
     return (await must(admin.from("action").update({ paypal_order_id: order.id, updated_at: new Date().toISOString() }).eq("id", a.id).select(ACTION_COLUMNS).single())) as ActionRow;
   } catch (e) {
     await admin.from("action").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", a.id);
