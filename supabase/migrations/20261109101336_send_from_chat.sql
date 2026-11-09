@@ -2,8 +2,8 @@
 -- saved with the answer so it's back after a reload. An account the person types for someone is saved for
 -- that person, so next time it's picked by itself. Both are the visitor's own rows (RLS) and go with Delete
 -- My Data through the person. Soul's Test Account is never saved here.
--- Later on Nov 9 send money moved to Memory (U21 rewritten), so nothing reads chat_message.send any more. It
--- stays as applied on Staging; dropping it was declined for now.
+-- Later on Nov 9 send money moved to Memory (U21 rewritten), so chat_message.send is dropped again in
+-- 20261109190000_drop_chat_send.
 alter table public.chat_message
   add column send jsonb; -- {"who": "Anna Bestie" | null, "amount": "30.00" | null}
 
