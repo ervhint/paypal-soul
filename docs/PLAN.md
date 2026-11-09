@@ -502,8 +502,104 @@ Tests: T-16.1–T-16.5 (unit), T-16.6 (integration), T-16.7, T-16.8 (unit), T-16
 
 Check while building: OpenRouter offers both models with tool calling (`lib/llm.ts` only asks for JSON today, and sends `temperature: 0`, which newer models can reject, so the Opus call drops it; forced `tool_choice` is rejected too, so use auto). A refusal from a model becomes the natural sorry, not an error. The prepared data covers a few days only, so periods, price changes and stopped payments are tested with made-up payments in unit tests. Today's word matcher in `lib/chat.ts` goes, and the `behindFigures` idea, the 60-row limit, the note and `PaymentList` stay. If Opus picks badly, first improve the function descriptions, then have it choose a group before a function.
 
+### Phase I — Closing the requirement gaps (agreed Nov 9)
+
+On Nov 9 the user checked Soul against their five requirements (habit recognition, richer memory, interests and preferences, proactive noticing, revising its understanding). Habit recognition is done. The other four have one gap each, and each gap is one unit below. Musts come first. Each unit runs in its own chat. U17 comes before U18 because the answer to U18's question ("it was a birthday gift") needs U17's one-off belief.
+
+#### U17 — Keep exceptions apart  (Must · requirement 5, revising its understanding)
+Covers: US-12, US-13, US-14      Screens: S-04, S-05, S-06      Depends on: U5, U6, U12      Est: 2.5h
+
+Why: a correction that names someone the person already supports joins that person's one support belief. `correct()` in `lib/correct.ts` keys support by who (`support:your mum`), adds the payment to it and replaces its text with the new sentence. So "that one was a birthday gift for my mum" turns "You buy the weekly groceries for your mum" into a sentence about a gift, and the broader belief is lost. Nothing marks a payment as an exception.
+
+How:
+1. Prove the bug first with a test that fails on today's code.
+2. The correction LLM also answers `oneOff`: true when the person marks the payments as a one-time thing (a gift, a birthday, "just this once", "only that one", an exception). Code keeps it only when the correction singles out some of the sentence's payments, not all of them.
+3. A one-off becomes its own belief: `kind` support when it names someone (so Spent on You still leaves it out), otherwise told, with key `oneoff:<first payment id>`. Its payments leave every other belief, as `nextTold` already does for support.
+4. The broader belief keeps its text and its other payments. Only a correction that isn't a one-off changes the broader belief's text, as today.
+5. A one-off payment is left out of repeats, habits and interests (`lib/totals.ts`), so one birthday transfer doesn't change a habit's days or its usual amount. U18 uses the same rule.
+6. The story LLM gets one-offs marked as exceptions in `toldYou` and says them apart from the pattern, like "On Nov 4 you sent your mum a birthday gift, apart from the usual groceries."
+7. Here's What Changed (code) says: "1 payment kept apart as a one-off: a birthday gift for your mum. Support for your mum stays as it was." Undo puts back both beliefs.
+8. Memory shows a one-off with a One-Off tag. Edit, Stop Using This and Use Again work as for any belief. A one-off never gives a send money suggestion (U9). No migration: the key is free text and stays unique per person and account.
+
+Acceptance:
+- AC-17.1 Given support for your mum on several payments, when the person corrects one of them as "that one was a birthday gift for my mum", then it becomes its own one-off belief, and the support belief keeps its text and its other payments.
+- AC-17.2 Given a one-off, when the story is rebuilt, then its chapter names it apart from the usual pattern, and Spent on You still leaves it out.
+- AC-17.3 Given a one-off payment with the same name as a repeat, when repeats, habits and interests are counted, then it's left out of their days, counts and amounts.
+- AC-17.4 Given a correction that changes the broader picture ("I buy mum's groceries every week now"), when it's saved, then the support belief's text changes and every one-off stays as it was.
+- AC-17.5 Given a one-off correction, when Here's What Changed shows, then it says the payment was kept apart and the broader belief didn't change, and Undo puts both beliefs and the chapters back.
+- AC-17.6 Given a one-off, when Memory opens, then it shows with a One-Off tag and can be edited, stopped and used again, and no send money suggestion comes from it.
+Tests: T-17.1 (unit), T-17.2 (unit), T-17.3 (unit), T-17.4 (integration), T-17.5 (e2e), T-17.6 (e2e)
+
+Check while building: what the LLM does with "birthday gift" today. It may already give a category (Gifts), which skips the support key and half works by luck. Run the real correction model on 10 short one-off and 10 broader corrections once, about $0.01, and show the user the score.
+
+#### U18 — Ask about an unusual payment  (Must · requirement 4, proactive noticing)
+Covers: US-05, US-06, US-12      Screens: S-02, S-03, S-04      Depends on: U17      Est: 3h
+
+Why: each chapter opens with what Soul noticed, and Soul asks about a habit it's Not Sure of. But it never spots a payment much bigger than usual, and never asks what it was for. The user's example: "This transfer is larger than your usual amount. Does it have a different purpose?"
+
+How:
+1. One rule in `lib/totals.ts`, `unusual(pays)`: a spending payment is unusual when the same name, or the same person for support, has at least 3 earlier payments, and it's at least 1.5 times their median and at least $5 more. One-offs (U17) and payments the person already explained are left out of both sides. Chat's `find_unusual` switches to this rule, so Chat and the story agree.
+2. The story brief gets `unusual` for each week: the payment, the usual amount and the earlier payments by ref. The LLM may say it plainly ("Your Nov 4 transfer to your mum was $80.00, more than the usual $25.00.") and never guesses why.
+3. Under the newest chapter that holds one, the first unexplained unusual payment gets an "I Noticed" card, written by code from code's figures: "This $80.00 to your mum is bigger than your usual $25.00. Does it have a different purpose?" Check the Payments opens the evidence sheet with that payment and the earlier ones. It sits where the Not Sure check note sits; when both exist, the unusual payment comes first.
+4. Two answers. **Tell Soul** opens the correction box (U5) on that payment, so "it was her birthday" becomes a one-off (U17) and "she needs more now" changes the broader belief. **Same as Usual** saves a `check` belief (the kind exists since U0, unused) with key `unusual:<payment id>`, so Soul never asks about that payment again. It isn't listed on Memory. Undo isn't needed: the card only asks.
+5. Summary: the "Belief to Check" figure counts the open question too.
+
+Acceptance:
+- AC-18.1 Given a name or person with at least 3 earlier payments, when a payment is at least 1.5 times their median and at least $5 more, then code marks it unusual. With fewer than 3 earlier payments, or a one-off, it isn't.
+- AC-18.2 Given an unexplained unusual payment in the newest chapters, when the story opens, then the I Noticed card shows code's sentence and question, and Check the Payments opens that payment and the earlier ones.
+- AC-18.3 Given the card, when the person taps Tell Soul and answers "it was a birthday gift", then a one-off belief is saved (U17), the chapter rewrites, and the card goes.
+- AC-18.4 Given the card, when the person taps Same as Usual, then nothing rewrites, the card goes and never comes back for that payment, and Memory doesn't list it.
+- AC-18.5 Given an unusual payment, when the story is written, then the LLM may state it with code's figures but never says why.
+- AC-18.6 Given Chat's "anything strange?", when it's answered, then it uses the same rule as the story.
+Tests: T-18.1 (unit), T-18.2 (e2e golden), T-18.3 (e2e), T-18.4 (e2e), T-18.5 (unit), T-18.6 (unit)
+
+Check while building: the prepared data has no unusual payment today (the repeats are the same amount each day). The live test needs one real sandbox payment that is bigger than usual for a repeated name or person. Ask the user how to make it before testing, for example a larger send to Soul's test account after a few $25.00 sends, or a one-off checkout named like a repeat. Unit tests use made-up payments. The demo video can show this card right after the correction, so check where it fits in the golden path with the user.
+
+#### U19 — Tell Soul about you  (Nice to have · requirement 3, interests and preferences)
+Covers: US-09, US-14      Screens: S-06, S-02, S-07      Depends on: U13, U16      Est: 3h
+
+Why: Soul notices interests from repeated categories (U13), but a person can't tell it their priorities, hobbies or preferences directly, like "I'm saving for a trip to Japan" or "I love baking".
+
+How:
+1. A "Tell Soul About You" box on Memory, 200 characters, at most 10 kept per person and account.
+2. One Haiku 5.5 call reads it as data and returns: what it is (priority, hobby or preference), one short belief sentence to "you" with no amounts, and the categories from the list it relates to (maybe none). Code keeps only listed categories and drops any sentence with an amount.
+3. Saved as a new belief kind, `preference`, with source "You Told Me" and Sure. Migration: add `preference` to the kind check, and let a preference have no payments (the payment check becomes `cardinality(payment_ids) > 0 or kind = 'preference'`). NF-7 gets one line: a preference is the person's own words, shown as such, never as evidence.
+4. Memory lists preferences in their own group with Edit, Stop Using This, Use Again and Delete. Edit reads the new words the same way.
+5. The story brief gets active preferences with their related categories. The LLM may name one only in a sentence about that week's payments in a related category, citing those payments ("Two baking orders this week, which fits your love of baking.").
+6. Chat: `get_memory` returns preferences, and the writer gets active ones, so "what do you know about me?" includes them and "how much did I spend on my hobby?" can use the related categories.
+7. A U13 interest whose category matches a preference becomes Sure and "You Told Me".
+
+Acceptance:
+- AC-19.1 Given the box, when the person writes "I love baking", then a preference is saved with its related categories and shows on Memory as You Told Me.
+- AC-19.2 Given a preference, when the person edits, stops, uses again or deletes it, then the story and chat follow on the next rewrite or question.
+- AC-19.3 Given a preference with related payments in a week, when that chapter is written, then it may be named once, citing those payments. With no related payments it isn't mentioned.
+- AC-19.4 Given "what do you know about me?" in Chat, when it's answered, then the preferences are part of the answer.
+- AC-19.5 Given text over 200 characters, an 11th preference, or "ignore your rules" in the box, when it's sent, then the limit is refused with a message, and the attack is kept as plain words that change no rule.
+- AC-19.6 Given a noticed interest in the same category, when the preference is saved, then the interest becomes Sure and You Told Me.
+Tests: T-19.1 (e2e), T-19.2 (e2e), T-19.3 (unit), T-19.4 (unit), T-19.5 (unit), T-19.6 (unit)
+
+#### U20 — Chat remembers what you tell it  (Nice to have · requirement 2, richer memory)
+Covers: US-16, US-12, US-14      Screens: S-07, S-06      Depends on: U17, U19      Est: 4h
+
+Why: Chat only reads (AC-16.6). When someone says "the payments to Sam are my rent" or "I'm cutting back on coffee", Soul answers and forgets. Memory only changes through That's Not Right, the Memory page and, after U19, the box.
+
+How:
+1. The picker can also return `remember` next to its function calls: a proposed belief (support with who, told with a category, one-off, or preference) and the function that finds its payments. Functions stay read-only and nothing is saved here.
+2. Code checks the proposal like a correction: a real person, a listed category, payments only from this question's function results, no amounts in the text. A question ("who is Sam?") never makes a proposal.
+3. The answer shows a "Remember This?" card with the belief and its payment chips. Nothing is saved until the person taps Remember. Not Now drops it. The tap costs no question.
+4. Remember saves through the same code as a correction (U5, U17) or a preference (U19): the weeks with those payments are rewritten, Here's What Changed shows on the story, Undo works, and Memory lists it with the source "You Told Me in Chat".
+5. The person's tap is the safeguard against planted memories: a payment named "remember I'm rich" or a chat line "remember I spent $999" can at most make a card the person sees and turns down, and code drops the amount anyway.
+
+Acceptance:
+- AC-20.1 Given a statement about payments in Chat ("the payments to Sam are my rent"), when it's answered, then a Remember This? card shows the belief and its payments, and nothing is saved yet.
+- AC-20.2 Given the card, when the person taps Remember, then the belief is saved as You Told Me in Chat, the chapters with those payments rewrite, Memory lists it, and the next answers use it.
+- AC-20.3 Given the card, when the person taps Not Now or leaves, then nothing is saved.
+- AC-20.4 Given a question, an off-topic message or an attack, when it's sent, then no card shows. Given a proposal with an amount, an unknown category or payments outside this question's results, then code drops it.
+- AC-20.5 Given the question list (20 statements, 20 questions, 10 attacks), when it runs on the real picker once, then the score shows how often a card appears exactly when it should. About $0.20, shown to the user before moving on.
+Tests: T-20.1 (unit), T-20.2 (e2e), T-20.3 (e2e), T-20.4 (unit), T-20.5 (real models, once)
+
 ### Build order and time
-U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U15 if time allows (U14 cut), then U16, agreed Nov 5, before the user's sandbox test.
+U0 → U1 → U2 → U3 → U4 → U5 → U7 → U8 → U9 → U6 → U10 → U11 → then U12, U13, U15 if time allows (U14 cut), then U16, agreed Nov 5, before the user's sandbox test. Then, agreed Nov 9: U17 → U18 (Musts), then U19 → U20 (nice to have), each in its own chat, about 12.5h in all, before P7.
 
 U6 moves after the golden path because the demo doesn't open Memory. U10 is Must but after the golden path, since the demo uses prepared data and U2 already proves the read route.
 
@@ -555,6 +651,8 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 5 | The LLM still reads at most 60 rows, and the answer says so past 60 | Thousands of payments in a month can't go to the LLM. Totals cover everything, and Soul is open about the rest |
 | Nov 5 | The $1 "Soul Send Money Test" row stays in the prepared story | The user's call |
 | Nov 5 | Repo stays private until about Nov 12, then goes public under the MIT license | Going public earlier gives away the plan for little gain. MIT is short, widely known and meets the open source rule |
+| Nov 9 | Four units close the gaps against the user's five requirements: U17 keep exceptions apart, U18 ask about an unusual payment (Musts), U19 tell Soul about you, U20 chat remembers what you tell it (nice to have). Each runs in its own chat, Musts first | The user wants every requirement met. A Devpost search on Nov 9 found PayPal history, auto-categories and grounded chat in several entries (FinSight AI, Little Wallet, Stella), but no story you correct, so revising and noticing are what set Soul apart |
+| Nov 9 | Chat may propose a memory (U20) but never saves one on its own: the person taps Remember | Functions stay read-only (AC-16.6), and a planted payment name or chat line can't change memory without the person seeing it |
 
 ## 6. Open questions
 1. Settled at G5: anonymous Supabase users for the private copy.

@@ -157,6 +157,34 @@ Latest run: 2026-11-05, U10: T-10.1, T-10.3, T-10.4, T-10.5 ✅, T-10.2 partly. 
 | T-16.12 | AC-16.12 | unit | Ask to cancel a subscription. | Code replies, and the LLM mock is called 0 times. | ✅ | `tests/chat.test.ts` "asking to cancel" |
 | T-16.13 | AC-16.13 | real models | Run the question list once on the real models. | A score for right function and right dates, shown to the user before moving on. | ✅ | `tests/real/` Nov 5, today fixed at Nov 5: 73 of 75 right first time, about 2.2s each, one round each. The 2 misses (fees, "Send $500") passed after a prompt fix, rerunning only those, so the other 73 weren't rerun on the final prompt. Whole answers: 20 of 20, read by eye, and the wording keeps the labels |
 
+## Phase I: Closing the requirement gaps
+
+| ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| T-17.1 | AC-17.1 | unit | Read a mocked correction "that one was a birthday gift for my mum" on one of three support payments. Written first, it fails on the old code. | A one-off belief with key `oneoff:…` holds that payment, and the support belief keeps its text and the other two payments. | ⏭ | |
+| T-17.2 | AC-17.2 | unit | Build the story brief with a one-off, then check the written chapter. | The one-off is marked as an exception in `toldYou`, and Spent on You leaves it out. | ⏭ | |
+| T-17.3 | AC-17.3 | unit | Count repeats, habits and interests with a one-off of a repeated name. | The one-off is left out of days, counts and amounts. | ⏭ | |
+| T-17.4 | AC-17.4 | integration | On Staging with a mocked LLM, save a one-off, then a broader correction for the same person. | The support belief's text changes, and the one-off stays as it was. | ⏭ | |
+| T-17.5 | AC-17.5 | e2e | Correct one payment as a birthday gift, read Here's What Changed, then tap Undo. | The note says it was kept apart and the broader belief didn't change. Undo puts both beliefs and the chapters back. | ⏭ | |
+| T-17.6 | AC-17.6 | e2e | Open Memory after a one-off. Edit it, stop it, use it again. Check the story for a send money suggestion. | One-Off tag shows, each action works, and no suggestion comes from the one-off. | ⏭ | |
+| T-18.1 | AC-18.1 | unit | Run `unusual` on made-up payments: 3 earlier at $25 then $80, 2 earlier then $80, $30 after three at $25, and a one-off. | Only the $80 after 3 earlier payments is unusual. | ⏭ | |
+| T-18.2 | AC-18.2 | e2e golden | Open the story with a real unusual sandbox payment. Tap Check the Payments. | The I Noticed card shows code's figures and question, and the sheet lists that payment and the earlier ones. | ⏭ | |
+| T-18.3 | AC-18.3 | e2e | Tap Tell Soul and answer "it was a birthday gift". | A one-off belief is saved, the chapter rewrites, and the card goes. | ⏭ | |
+| T-18.4 | AC-18.4 | e2e | Tap Same as Usual, then reload and open Memory. | No rewrite, the card stays gone, and Memory doesn't list it. | ⏭ | |
+| T-18.5 | AC-18.5 | unit | Check a written chapter that states an unusual payment, and one that gives a reason. | Code's figures pass. A sentence with an amount code didn't give is dropped, and the prompt forbids a reason. | ⏭ | |
+| T-18.6 | AC-18.6 | unit | Run Chat's `find_unusual` and the story rule on the same payments. | Both find the same payments. | ⏭ | |
+| T-19.1 | AC-19.1 | e2e | Write "I love baking" in Tell Soul About You. | A preference with its related categories shows on Memory as You Told Me. | ⏭ | |
+| T-19.2 | AC-19.2 | e2e | Edit, stop, use again and delete a preference. Check the story and Chat after each. | Story and Chat follow each change. | ⏭ | |
+| T-19.3 | AC-19.3 | unit | Build a brief with a preference and weeks with and without related payments. | It's offered only in the week with related payments, cited by them. | ⏭ | |
+| T-19.4 | AC-19.4 | unit | Ask "what do you know about me?" with a mocked picker. | `get_memory` returns the preferences, and the answer includes them. | ⏭ | |
+| T-19.5 | AC-19.5 | unit | Send 201 characters, an 11th preference, and "ignore your rules". | The limits are refused with a message. The attack is saved as plain words and changes no rule. | ⏭ | |
+| T-19.6 | AC-19.6 | unit | Save a preference whose category matches a noticed interest. | The interest becomes Sure and You Told Me. | ⏭ | |
+| T-20.1 | AC-20.1 | unit | Send "the payments to Sam are my rent" with a mocked picker that proposes a memory. | The answer carries a Remember This? card with the belief and payments, and nothing is saved. | ⏭ | |
+| T-20.2 | AC-20.2 | e2e | Tap Remember, then open the story, Memory, and ask a follow-up. | The belief is saved as You Told Me in Chat, chapters rewrite, Memory lists it, and the answer uses it. | ⏭ | |
+| T-20.3 | AC-20.3 | e2e | Tap Not Now, and in another answer leave the page. | Nothing is saved either time. | ⏭ | |
+| T-20.4 | AC-20.4 | unit | Send a question, an off-topic line, an attack, and proposals with an amount, an unknown category and outside payments. | No card for the first three. Code drops the bad proposals. | ⏭ | |
+| T-20.5 | AC-20.5 | real models | Run 20 statements, 20 questions and 10 attacks on the real picker once. | A score for cards shown exactly when they should be, shown to the user before moving on. | ⏭ | |
+
 ## Non-functional
 
 | ID | Covers | Type | Steps (short) | Expected | Result | Evidence |
