@@ -30,7 +30,7 @@ const store = (): ChatStore => {
     actions: none,
     leftOut: none,
     lastRead: async () => null,
-    save: async (q, a) => void turns.push({ role: "user", text: q, paymentIds: [] }, { role: "soul", ...a }),
+    save: async (q, a) => (turns.push({ role: "user", text: q, paymentIds: [] }, { role: "soul", ...a }), "m1"),
   };
 };
 const QUESTIONS = ["How much would I save without coffee?", "What does coffee cost me per year?", "How much did I spend this month?", "Any chocolate?", "Is my spending going up?", "What's my average per week?", "Where will I end up this month?", "What do I spend most on?", "How much did I spend on myself?", "What's my PayPal balance?"];

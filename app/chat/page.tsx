@@ -5,14 +5,15 @@ import { PaymentList, Sheet, money } from "@/components/ui";
 import type { Payment } from "@/lib/types";
 import { titleCase } from "@/lib/title-case";
 
-type Msg = { role: "user" | "soul"; text: string; sources: Payment[]; none: boolean };
+type Card = { text: string; kind: string; sources: Payment[] };
+type Msg = { id?: string; role: "user" | "soul"; text: string; sources: Payment[]; none: boolean; remember?: Card | null; decided?: string };
 
 const CHIPS = 5; // cited payments shown under an answer; the evidence sheet lists them all
 const STEP_MS = 500;
 const FAILED = { status: "error", message: "I couldn't reach Soul just now. Ask again in a moment." };
 const STARTERS = ["Why Do Groceries Keep Showing Up?", "How Much Did I Spend on Myself?", "Tell Me About My Flights"];
 
-type Reply = { status: string; message?: string; text?: string; sources?: Payment[]; none?: boolean };
+type Reply = { status: string; message?: string; id?: string; text?: string; sources?: Payment[]; none?: boolean; remember?: Card | null };
 
 /** Reads the answer's lines as they come: each step, then the reply. */
 async function readReply(res: Response, onStep: (step: string) => void): Promise<Reply> {
@@ -47,6 +48,7 @@ export default function ChatPage() {
   const end = useRef<HTMLDivElement>(null);
   const steps = useRef<string[]>([]);
   const close = useCallback(() => setOpen(null), []);
+  const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: loaded ? "smooth" : "auto", block: "end" });
@@ -76,8 +78,21 @@ export default function ChatPage() {
       .catch(() => FAILED as Reply);
     setBusy(false);
     // A refusal or a failed answer shows here only; it isn't saved or counted.
-    if (r.status === "answered") add({ role: "soul", text: r.text!, sources: r.sources!, none: r.none! }, 1);
+    if (r.status === "answered") add({ id: r.id, role: "soul", text: r.text!, sources: r.sources!, none: r.none!, remember: r.remember ?? null }, 1);
     else add({ role: "soul", text: r.message!, sources: [], none: true });
+  };
+
+  const patch = (id: string, m: Partial<Msg>) => setData((d) => d && { ...d, messages: d.messages.map((x) => (x.id === id ? { ...x, ...m } : x)) });
+  // Remember or Not Now (U20): nothing is saved before this tap, and it costs no question.
+  const decide = async (m: Msg, remember: boolean) => {
+    if (!m.id || saving) return;
+    setSaving(m.id);
+    const r = await fetch("/api/chat", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.id, remember }) })
+      .then((res) => res.json())
+      .catch(() => ({ status: "error", message: "I couldn't reach Soul just now. Try again in a moment." }));
+    setSaving(null);
+    if (r.status === "done") patch(m.id, { remember: null, decided: remember ? "Remembered. Your story and Memory show it now." : "Okay, I won't remember that." });
+    else patch(m.id, { decided: r.message, ...(r.message?.startsWith("That suggestion") ? { remember: null } : {}) });
   };
 
   return (
@@ -107,6 +122,28 @@ export default function ChatPage() {
                   </div>
                 </>
               )}
+              {m.remember && (
+                <div className="check-note remember">
+                  <span className="tag plain">Remember This?</span>
+                  <h2>{m.remember.text}</h2>
+                  {m.remember.sources.length > 0 && (
+                    <div className="chips">
+                      {m.remember.sources.slice(0, CHIPS).map((p) => (
+                        <button key={p.id} className="pay-chip" onClick={() => setOpen({ text: m.remember!.text, pays: [p], of: m.remember!.sources.length })}>
+                          <i className={`fa-solid fa-${p.icon}`} aria-hidden="true" />
+                          {titleCase(p.item)} · {p.date} · {money(p.amount)}
+                        </button>
+                      ))}
+                      {m.remember.sources.length > CHIPS && <button className="pay-chip" onClick={() => setOpen({ text: m.remember!.text, pays: m.remember!.sources, of: m.remember!.sources.length })}>+{m.remember.sources.length - CHIPS} More</button>}
+                    </div>
+                  )}
+                  <div className="row">
+                    <button className="btn dark small" disabled={!!saving} onClick={() => decide(m, true)}>{saving === m.id ? "Remembering…" : "Remember"}</button>
+                    <button className="btn line small" disabled={!!saving} onClick={() => decide(m, false)}>Not Now</button>
+                  </div>
+                </div>
+              )}
+              {m.decided && <p className="chat-step" role="status">{m.decided}</p>}
             </div>
           ),
         )}

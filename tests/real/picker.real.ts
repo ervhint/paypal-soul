@@ -42,7 +42,7 @@ it("scores the picker on the question list", async () => {
       for (let job = queue.shift(); job; job = queue.shift()) {
         const history: Turn[] = (job.x.earlier ?? []).flatMap((e) => [{ role: "user" as const, text: e.question, paymentIds: [] }, { role: "soul" as const, text: e.answer, paymentIds: [] }]);
         const started = Date.now();
-        const p = await pickFunctions(job.x.q, ledger, history, askTools).catch((e) => ({ ending: "answer", results: [], rounds: 0, calls: [], failed: String(e) }) as Picked & { failed: string });
+        const p = await pickFunctions(job.x.q, ledger, history, askTools).catch((e) => ({ ending: "answer", results: [], rounds: 0, calls: [], remember: null, failed: String(e) }) as Picked & { failed: string });
         out.push({ i: job.i, q: job.x.q, miss: "failed" in p ? p.failed : score(job.x, p), calls: p.calls, ending: p.ending, rounds: p.rounds, ms: Date.now() - started });
       }
     }),

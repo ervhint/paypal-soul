@@ -56,6 +56,7 @@ function memoryStore() {
     lastRead: async () => null,
     save: async (q, a) => {
       turns.push({ role: "user", text: q, paymentIds: [] }, { role: "soul", ...a });
+      return "m1";
     },
   };
   return { store, turns };

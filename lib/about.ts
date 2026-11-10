@@ -15,7 +15,7 @@ import { weekOf } from "@/lib/totals";
 export const MAX_ABOUT = 200;
 export const MAX_PREFERENCES = 10;
 const MAX_CATEGORIES = 3;
-const TOPICS = ["priority", "hobby", "preference"] as const;
+export const TOPICS = ["priority", "hobby", "preference"] as const;
 export type Topic = (typeof TOPICS)[number];
 export type AboutReading = { topic: Topic; text: string; categories: string[] };
 
@@ -97,10 +97,7 @@ const loadRow = async (db: SupabaseClient, accountId: string, id: string) =>
 export async function tellAbout(db: SupabaseClient, personId: string, accountId: string, text: unknown, ask: AskJson): Promise<Result> {
   const checked = checkSaid(text);
   if ("error" in checked) return checked.error;
-  const { count, error: countError } = await db.from("belief").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("kind", "preference");
-  if (countError) throw countError;
-  if ((count ?? 0) >= MAX_PREFERENCES) return error(FULL);
-
+  if (await isFull(db, accountId)) return error(FULL);
   let r: AboutReading;
   try {
     r = await readAbout(checked.said, ask);
@@ -108,12 +105,24 @@ export async function tellAbout(db: SupabaseClient, personId: string, accountId:
     console.error("about failed", e);
     return error(FAILED);
   }
+  return savePreference(db, personId, accountId, r, "You Told Me", ask);
+}
+
+const isFull = async (db: SupabaseClient, accountId: string) => {
+  const { count, error: countError } = await db.from("belief").select("id", { count: "exact", head: true }).eq("account_id", accountId).eq("kind", "preference");
+  if (countError) throw countError;
+  return (count ?? 0) >= MAX_PREFERENCES;
+};
+
+/** Saves a preference already read (from the box, or a Remember tap in Chat, U20) and rewrites the weeks it relates to. */
+export async function savePreference(db: SupabaseClient, personId: string, accountId: string, r: AboutReading, source: string, ask: AskJson): Promise<Result> {
+  if (await isFull(db, accountId)) return error(FULL);
   const now = new Date().toISOString();
   // Saved first, so the rewritten sentences can point to it; taken back if the rewrite fails.
   const row = await must(
     db
       .from("belief")
-      .insert({ person_id: personId, account_id: accountId, kind: "preference", text: r.text, topic: r.topic, categories: r.categories, sureness: "sure", source: `You Told Me, ${short(now)}`, payment_ids: [], told_at: now })
+      .insert({ person_id: personId, account_id: accountId, kind: "preference", text: r.text, topic: r.topic, categories: r.categories, sureness: "sure", source: `${source}, ${short(now)}`, payment_ids: [], told_at: now })
       .select("id")
       .single(),
   );

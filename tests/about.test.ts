@@ -98,7 +98,7 @@ describe("Chat (T-19.4)", () => {
   });
 
   it("answers 'what do you know about me?' with them", async () => {
-    const store: ChatStore = { ...ledger, history: async () => [], askedSince: async () => 0, payments: async () => coffee, stopped: async () => [], save: async () => {} };
+    const store: ChatStore = { ...ledger, history: async () => [], askedSince: async () => 0, payments: async () => coffee, stopped: async () => [], save: async () => "m1" };
     const pick: AskTools = async (_, messages) =>
       messages.length === 1 ? { text: "final", calls: [{ id: "c1", name: "get_memory", args: "{}" }], message: { role: "assistant" } } : { text: "", calls: [], message: {} };
     let given = "";
