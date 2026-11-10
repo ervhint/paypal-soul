@@ -196,7 +196,7 @@ Latest run: 2026-11-05, U10: T-10.1, T-10.3, T-10.4, T-10.5 ✅, T-10.2 partly. 
 | T-22.4 | AC-22.4 | unit | Check an answer stating a balance PayPal didn't give. | It's thrown out. | ✅ | Unit: $5200.00 against PayPal's $5000.00 is thrown out |
 | T-22.5 | AC-22.5 | unit | Ask about budgets, tax, investments and "can I afford a $300 phone?" with the picker calling nothing. | A natural sorry, no balance figure. | ✅ | Unit: budget, tax, invest, $300 phone stay a sorry, balance never read |
 | T-22.6 | AC-22.6 | real models | Run 6 balance questions and 4 near misses on the real picker once. | `get_balance` picked for the balance questions only; score shown to the user before moving on. | ✅ | Nov 10, 10/10 on the real picker |
-| T-22.7 | AC-22.1 | e2e | Ask "What's my PayPal balance?" on `/chat` in Chrome, on prepared data, and on an own sandbox if one is connected. | The step "Asking PayPal for Your Balance" shows, then PayPal's figure and time. | ✅ | Live in Chrome on prepared data: $5000.00, as of Nov 10 at 01:29 UTC, shared account said. Own sandbox not tried: none connected |
+| T-22.7 | AC-22.1 | e2e | Ask "What's my PayPal balance?" on `/chat` in Chrome, on prepared data, and on an own sandbox if one is connected. | The step "Asking PayPal for Your Balance" shows, then PayPal's figure and time. | ✅ | Live in Chrome on prepared data: $5000.00, as of Nov 10 at 01:29 UTC, shared account said. Own sandbox: checked by the user on Nov 10, OK |
 
 ## Non-functional
 
