@@ -68,7 +68,7 @@ export function Shell({ children }: { children: ReactNode }) {
     setView((n) => n + 1);
     router.push(to);
   };
-  // A sandbox below the minimum isn't chosen: /connect says what's missing.
+  // A connected sandbox can always be chosen; below the minimum, Story and Memory say what's missing.
   const choose = async (next: "prepared" | "own") => {
     const r = await post("/api/connect", { source: next });
     await closeAll(r.ok ? "/story" : "/connect");

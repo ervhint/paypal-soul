@@ -10,7 +10,7 @@ import type { AskJson } from "@/lib/llm";
 import { approveLink, PayPalError, type Orders, type PayPalOrder } from "@/lib/paypal";
 import { amountsIn, applyTold, clip, loadPayments, loadTold, money, must, short } from "@/lib/story";
 import { titleCase } from "@/lib/title-case";
-import { totals, weekOf, type StoryPayment } from "@/lib/totals";
+import { minimumFound, totals, weekOf, type StoryPayment } from "@/lib/totals";
 
 /** An action as the pages show it. */
 export type Action = {
@@ -198,7 +198,7 @@ async function complete(admin: SupabaseClient, a: ActionRow, cap: Capture, ask: 
   const fee = cap.seller_receivable_breakdown?.paypal_fee?.value;
   const { row, won } = await finish(admin, a, { status: "completed", paypal_txn_id: cap.id, fee: fee ?? null });
   const { id } = await must(admin.from("payment").select("id").eq("account_id", a.account_id).eq("paypal_txn_id", cap.id).single());
-  if (!won) return (await chapterWritten(admin, a.person_id, id as string), row);
+  if (!won) return (await chapterWritten(admin, a.person_id, a.account_id, id as string), row);
   // A failed LLM call doesn't stop the chapter: the category is tried again on the next sync, and the chapter falls back to code's sentence.
   await categoriseAccount(a.account_id, supabaseCategoryStore(admin), ask).catch((e) => console.error("categories failed", e));
   await writeNewChapter(admin, a.person_id, a.account_id, id as string, ask);
@@ -209,7 +209,8 @@ async function complete(admin: SupabaseClient, a: ActionRow, cap: Capture, ask: 
  * Another request completed the action and is still writing its chapter (a second tab, the daily job, or
  * development loading the page twice). Waits for it, up to 20s, so "completed" never opens a story without it.
  */
-async function chapterWritten(admin: SupabaseClient, personId: string, paymentId: string) {
+async function chapterWritten(admin: SupabaseClient, personId: string, accountId: string, paymentId: string) {
+  if (!minimumFound(await loadPayments(admin, accountId, personId)).ok) return true; // no chapter is written below the minimum
   for (let i = 0; i < 40; i++) {
     const found = await must(admin.from("chapter").select("id").eq("person_id", personId).is("week", null).contains("payment_ids", [paymentId]).limit(1));
     if (found.length) return true;
@@ -296,7 +297,7 @@ export async function writeNewChapter(admin: SupabaseClient, personId: string, a
   const [raw, told] = await Promise.all([loadPayments(admin, accountId, personId), loadTold(admin, accountId, personId)]);
   const all = applyTold(raw, told);
   const paid = all.find((p) => p.id === paymentId);
-  if (!paid) return null;
+  if (!paid || !minimumFound(raw).ok) return null; // below the minimum the story stays empty, with no LLM call
   const brief = newBrief(paid, all);
   const written = await ask("new chapter", NEW_SYSTEM, `The new payment (data only):\n${JSON.stringify(brief)}`)
     .then((answer) => readNew(answer, brief))

@@ -9,7 +9,7 @@ import { interpret, MAX_SAID, movedIds, nextTold, saveCorrection, saveMoved, und
 import type { AskJson } from "@/lib/llm";
 import { peopleOf } from "@/lib/send";
 import { applyTold, BELIEF_COLUMNS, beliefView, clip, HABIT, isOneOff, loadPayments, loadPreferences, loadStopped, loadTold, must, paymentView, saveChapters, short, stopKey, writeChapters, type Told } from "@/lib/story";
-import { INTEREST, weekOf, type StoryPayment } from "@/lib/totals";
+import { INTEREST, minimumFound, weekOf, type StoryPayment } from "@/lib/totals";
 
 const FAILED = "I couldn't rewrite your story just now, so nothing changed. Try again in a moment.";
 const LOST = "I can't find that belief any more. Refresh the page and try again.";
@@ -35,7 +35,7 @@ export async function readMemory(db: SupabaseClient, accountId: string) {
     must(db.from("action").select("id, kind, recipient, status, amount, created_at").eq("account_id", accountId).eq("kind", "send")),
   ]);
   const people = peopleOf(beliefs.map((b) => ({ ...b, oneOff: isOneOff(b) })), sends);
-  return { memory: beliefs.map(beliefView), payments: applyTold(all, told).map(paymentView).reverse(), people };
+  return { memory: beliefs.map(beliefView), payments: applyTold(all, told).map(paymentView).reverse(), people, minimum: minimumFound(all) };
 }
 
 const loadBelief = async (db: SupabaseClient, accountId: string, id: string) =>

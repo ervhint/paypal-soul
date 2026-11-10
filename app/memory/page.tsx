@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/lib/use-api";
 import { PaymentRow, Sheet, Skeleton, Toast, money, useToast } from "@/components/ui";
 import { SendForm } from "@/components/send-form";
+import { MinimumSteps, UsePrepared, type Minimum } from "@/components/minimum";
 import { titleCase } from "@/lib/title-case";
 import type { Memory, Payment } from "@/lib/types";
 
@@ -12,7 +13,7 @@ const CHIPS = 5;
 const ABOUT_MAX = 200; // characters in Tell Soul About You (U19)
 const ABOUT_KEEP = 10; // things kept about the person
 type Person = { who: string; beliefId: string | null; last: { actionId: string; status: "waiting" | "completed"; amount: number; at: string } | null };
-type Data = { memory: Memory[]; payments: Payment[]; people: Person[] };
+type Data = { memory: Memory[]; payments: Payment[]; people: Person[]; minimum?: Minimum };
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** The person's latest send, under their name on Memory (U21). */
@@ -85,6 +86,14 @@ export default function MemoryPage() {
   const save = (m: Memory, who?: string) => change(m, { text: draft, who }, "Saved. I'll use your wording");
   const prefs = data?.memory.filter((m) => m.kind === "preference") ?? [];
   const beliefs = data?.memory.filter((m) => m.kind !== "preference") ?? [];
+  // Development only, to see a state on demand: ?state=empty | little
+  const [demo, setDemo] = useState<string | null>(null);
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") setDemo(new URLSearchParams(location.search).get("state"));
+  }, []);
+  // An own sandbox below the minimum has no story, so nothing to remember or change yet (U10).
+  const waiting =
+    demo === "empty" ? { days: 0, payments: 0, repeats: 0, ok: false } : demo === "little" ? { days: 3, payments: 2, repeats: 0, ok: false } : data?.minimum && !data.minimum.ok ? data.minimum : null;
 
   return (
     <div className="wrap narrow">
@@ -92,6 +101,18 @@ export default function MemoryPage() {
       <h1 className="display" style={{ marginTop: 12, fontSize: "clamp(32px, 4.6vw, 54px)" }}>Memory</h1>
       <p className="lead">Everything I believe, in plain words. Edit a belief, or tell me to stop using it. Each one comes from payments or from something you told me. You can send money to the people here through PayPal.</p>
 
+      {waiting ? (
+        <section className="tell">
+          <h2>{waiting.payments ? "Nothing to Remember Yet" : "No Payments to Remember Yet"}</h2>
+          <p>{waiting.payments ? "I only remember what your payments show and what you tell me about them, and there isn’t enough here for a story yet." : "This sandbox account has no payments yet, so there’s nothing for me to remember."} Memory starts with your story, once your sandbox has 5 or more payments across at least 7 days, with 1 repeat.</p>
+          {!!waiting.payments && <MinimumSteps found={waiting} />}
+          <div className="row" style={{ marginTop: 20 }}>
+            <Link className="btn small" href="/buy">Make a Sandbox Purchase</Link>
+            <UsePrepared className="btn dark small" />
+          </div>
+        </section>
+      ) : (
+      <>
       <section className="tell">
         <h2>Tell Soul About You</h2>
         <p>A priority, a hobby or something you like. I keep it in your words, and mention it when your payments fit it.</p>
@@ -226,6 +247,8 @@ export default function MemoryPage() {
             ))}
           </ul>
         </section>
+      )}
+      </>
       )}
       <section className="danger">
         <h2>Delete My Data</h2>

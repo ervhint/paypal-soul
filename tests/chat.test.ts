@@ -294,8 +294,11 @@ describe("limits", () => {
     expect((await answer(store, "How much?", deps({ credit: async () => null }), NOW)).status).toBe("answered"); // the key's own limit still holds
   });
 
-  it("answers with no payments without asking the LLM", async () => {
-    expect(await answer(memoryStore([]).store, "How much?", deps({ ask: never, pick: never }), NOW)).toMatchObject({ status: "answered", text: "I can't see any payments yet, so I can't answer that.", sources: [], none: true });
+  it("still asks the picker with no payments, so an empty sandbox can use Chat (T-10.6)", async () => {
+    let picked = 0;
+    const pick: Llm["pick"] = async (...a) => (picked++, always()(...a));
+    expect((await answer(memoryStore([]).store, "How much?", deps({ pick }), NOW)).status).toBe("answered");
+    expect(picked).toBe(1);
   });
 });
 

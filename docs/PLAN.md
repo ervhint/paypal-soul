@@ -400,7 +400,8 @@ Acceptance:
 - AC-10.3 Given an account below the minimum (payments spanning 7 days, 5 payments, and one name seen on 2 or more days), when it's imported, then Soul says what's missing and offers the prepared data.
 - AC-10.4 Given a connected person, when they switch to Prepared Data and back, then each keeps its own memory and chat without a new login.
 - AC-10.5 Given Log Out of My Sandbox, when it's tapped, then Soul forgets the link and returns to the entry.
-Tests: T-10.1 (e2e, manual consent), T-10.2 (e2e), T-10.3 (unit), T-10.4 (e2e), T-10.5 (e2e)
+- AC-10.6 (Nov 10, changes AC-10.3) Given a connected sandbox with no payments or below the minimum, when Check Connection runs or the person picks My Sandbox, then they move onto it. Story and Memory say what's missing (no payments, or the three checks with what was found) and offer a sandbox purchase or the prepared data. No chapter, habit, interest, Remember This? card or New chapter is written, so no LLM call, and Memory refuses changes. Chat still works, the balance too.
+Tests: T-10.1 (e2e, manual consent), T-10.2 (e2e), T-10.3 (unit), T-10.4 (e2e), T-10.5 (e2e), T-10.6 (integration, e2e)
 
 #### U11 — Delete My Data and the daily job  (Must)
 Covers: US-02, US-03      Screens: S-15      Depends on: U9, U10      Est: 2.5h
@@ -708,6 +709,7 @@ Musts total about 34.5h, Shoulds 7h. P6 runs Nov 4 to Nov 10, then P7 Nov 10 to 
 | Nov 9 | The I Noticed card asks only about payments from the last 30 days, and the story brief gives the LLM only the latest 5 earlier payments to cite (code still works out the usual from all) | The user, U18 review: an older payment's card sits in a chapter behind Show Older Chapters while Belief to Check still counts it; a long history made every rewrite carry every earlier payment. 3 months was weighed and dropped for that reason |
 | Nov 9 | Send money starts from Memory, next to each person Soul knows about, with no reason claimed; not from the story, Chat or a page of its own (U21) | The user: the story is for reading, Chat for questions, and a Send page would make Soul a second PayPal. Soul only knows a person matters because you told it, so it offers nothing more than the button |
 | Nov 9 | Chat may propose a memory (U20) but never saves one on its own: the person taps Remember | Functions stay read-only (AC-16.6), and a planted payment name or chat line can't change memory without the person seeing it |
+| Nov 10 | A connected sandbox can always be used, even with no payments or below the minimum. Story and Memory then say what's missing, and nothing is written | The user: an empty account is common. Chat still works on it, and writing nothing below the minimum spends no LLM credit |
 | Nov 10 | Chat reads the balance from PayPal on every question that asks for it, and never saves it (U22) | The user's choice: the newest figure over a faster saved one. A test call showed the read works with the consent Soul already asks for |
 
 ## 6. Open questions

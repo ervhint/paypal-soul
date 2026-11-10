@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { post, useApi } from "@/lib/use-api";
+import { MinimumSteps, UsePrepared, type Minimum } from "@/components/minimum";
 import { Empty, PaymentRow, Sheet, Skeleton, Toast, money, useToast } from "@/components/ui";
 import { titleCase } from "@/lib/title-case";
 import type { Action } from "@/lib/action";
@@ -17,6 +18,7 @@ type Story = {
   change: Change | null;
   notice: Notice | null;
   summary: { payments: number; spent: number; habits: number; checks: number };
+  minimum?: Minimum | null; // null with no data chosen
   source?: "prepared" | "own" | null;
   syncedThrough: string | null;
 };
@@ -25,7 +27,7 @@ type Step = "evidence" | "correct" | "ask";
 const saved = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 function StoryView() {
-  const param = useSearchParams().get("state"); // development only, to see a state on demand: syncing | offline | empty
+  const param = useSearchParams().get("state"); // development only, to see a state on demand: syncing | offline | empty | little
   const demo = process.env.NODE_ENV === "development" ? param : null;
   const { data, reload } = useApi<Story>("/api/story");
   const [sync, setSync] = useState<"idle" | "syncing" | "offline">("idle");
@@ -102,15 +104,31 @@ function StoryView() {
     toast.show("Chapter Rewritten");
   };
 
-  if (demo === "empty" || (data && data.payments.length === 0))
+  // An own sandbox below the minimum (or with nothing at all) gets no story: it says what's missing instead.
+  const little = demo === "little" ? { days: 3, payments: 2, repeats: 0, ok: false } : data?.minimum && !data.minimum.ok && data.minimum.payments ? data.minimum : null;
+  const choices = (
+    <div className="row">
+      <Link className="btn" href="/buy">Make a Sandbox Purchase</Link>
+      <UsePrepared />
+    </div>
+  );
+  if (little)
+    return (
+      <div className="wrap narrow">
+        <p className="eyebrow">Using My Sandbox</p>
+        <h1 className="display" style={{ fontSize: "clamp(32px, 4.6vw, 54px)", marginTop: 12 }}>Not Enough Here for a Story Yet</h1>
+        <p className="lead">I don&rsquo;t want to invent a pattern from a few payments. Here&rsquo;s what I found in your sandbox account.</p>
+        <MinimumSteps found={little} />
+        <div style={{ marginTop: 28 }}>{choices}</div>
+        <p className="note">Sandbox payments keep their real dates, so history can&rsquo;t be backdated. You can still ask Chat about these payments and your balance.</p>
+      </div>
+    );
+  if (demo === "empty" || (data?.minimum && !data.minimum.payments) || (data && data.payments.length === 0))
     return (
       <div className="wrap">
         <Empty icon="receipt" title="No Payments to Read Yet">
-          <p>I only write about payments I can see, and this account has none. Make a Sandbox Purchase and your first chapter appears here, or read our prepared data.</p>
-          <div className="row">
-            <Link className="btn" href="/buy">Make a Sandbox Purchase</Link>
-            <Link className="btn dark" href="/">Use Prepared Data</Link>
-          </div>
+          <p>I only write about payments I can see, and this account has none yet. Your story starts once it has 5 or more payments across at least 7 days, with 1 repeat. You can still ask Chat about your balance.</p>
+          {choices}
         </Empty>
       </div>
     );

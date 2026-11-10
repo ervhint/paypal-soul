@@ -13,7 +13,7 @@ export async function GET() {
   const client = await requestDb();
   const v = await currentVisitor(client);
   if (!v?.accountId)
-    return Response.json({ chapters: [], payments: [], memory: [], leftOut: [], actions: [], change: null, notice: null, summary: { payments: 0, spent: 0, habits: 0, checks: 0 }, syncedThrough: null });
+    return Response.json({ chapters: [], payments: [], memory: [], leftOut: [], actions: [], change: null, notice: null, minimum: null, summary: { payments: 0, spent: 0, habits: 0, checks: 0 }, syncedThrough: null });
   const [story, rows, account, real] = await Promise.all([
     readStory(client, v.accountId),
     client.from("left_out_row").select("paypal_txn_id, occurred_at, amount, event_code, reason").eq("account_id", v.accountId).order("occurred_at", { ascending: false }),

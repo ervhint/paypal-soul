@@ -4,12 +4,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncAccount, type Reader } from "@/lib/import";
 import { PayPalError, type Consent } from "@/lib/paypal";
-import { accountMinimum, PENDING } from "@/lib/supabase";
-import type { Found } from "@/lib/totals";
+import { PENDING } from "@/lib/supabase";
 
 const DAY = 86_400_000;
 
-export type Check = { state: "start" | "pending" | "denied" | "empty" | "offline" | "ready" } | { state: "little"; found: Found };
+export type Check = { state: "start" | "pending" | "denied" | "offline" | "ready" };
 
 async function ownAccount(admin: SupabaseClient, personId: string) {
   const { data, error } = await admin.from("paypal_account").select("id, paypal_account_id, tracking_id").eq("kind", "own").eq("owner_id", personId).maybeSingle();
@@ -30,7 +29,7 @@ export async function startConsent(admin: SupabaseClient, personId: string, orig
   return link;
 }
 
-/** Check Connection: finds the account, imports it, and moves the person onto it once it's enough for a story. */
+/** Check Connection: finds the account, imports it, and moves the person onto it, whatever it holds. Story and Memory say what's missing. */
 export async function checkConnection(admin: SupabaseClient, personId: string, consent: Consent, read: Reader, sync: (accountId: string) => Promise<unknown> = syncAccount): Promise<Check> {
   const own = await ownAccount(admin, personId);
   if (!own) return { state: "start" };
@@ -51,9 +50,6 @@ export async function checkConnection(admin: SupabaseClient, personId: string, c
     console.error("check connection failed", e);
     return { state: "offline" };
   }
-  const { ok, ...found } = await accountMinimum(admin, own.id);
-  if (!found.payments) return { state: "empty" };
-  if (!ok) return { state: "little", found };
   const { error } = await admin.from("person").update({ account_id: own.id }).eq("id", personId);
   if (error) throw error;
   return { state: "ready" };

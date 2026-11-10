@@ -15,13 +15,13 @@ const NOW = new Date("2026-11-10T09:00:00Z");
 const none = async () => [];
 const PAYPAL: Balance = { asOf: "2026-11-09T14:59:00Z", currencies: [{ currency: "USD", total: 5000, available: 4990, withheld: 10 }] };
 
-function memoryStore(balance: ChatStore["balance"]) {
+function memoryStore(balance: ChatStore["balance"], payments: StoryPayment[] = [coffee]) {
   const turns: (Turn & { at: string })[] = [];
   let reads = 0;
   const store: ChatStore = {
     history: async () => turns,
     askedSince: async (iso) => turns.filter((t) => t.role === "user" && t.at >= iso).length,
-    payments: async () => [coffee],
+    payments: async () => payments,
     beliefs: none,
     stopped: none,
     chapters: none,
@@ -66,6 +66,12 @@ describe("get_balance answers from PayPal (T-22.1)", () => {
     expect(steps).toContain("Asking PayPal for Your Balance");
     expect(r).toMatchObject({ status: "answered", text: "Your PayPal balance is $5000.00, with $4990.00 available, as of Nov 9 at 14:59 UTC.", sources: [] });
     expect(turns[1].paymentIds).toEqual([]);
+  });
+
+  it("answers on a sandbox with no payments (T-10.6)", async () => {
+    const { store } = memoryStore(own, []);
+    const { ask } = writing((d) => ({ answer: `Your PayPal balance is $5000.00, with $4990.00 available, as of ${d.results![0].asOf}.`, payments: [], none: false }));
+    expect(await answer(store, "What's my balance?", llm({ ask, pick: picking(call("get_balance")) }), NOW)).toMatchObject({ status: "answered", sources: [] });
   });
 
   it("leaves on hold out at $0.00, names other currencies, and says when it's the shared prepared account", async () => {

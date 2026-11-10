@@ -27,7 +27,8 @@ const pay = (day: string, name: string, amount: number, category: string, payee 
 });
 const rent = ["2026-10-01", "2026-11-01"].map((d) => pay(d, "Transfer", 600, "unknown", "Sam"));
 const coffee = ["2026-11-02", "2026-11-03"].map((d) => pay(d, "Morning coffee", 4.5, "food_drinks.snacks_drinks"));
-const all = [...rent, ...coffee];
+const lunch = pay("2026-11-04", "Lunch", 9, "food_drinks.daily_meal");
+const all = [...rent, ...coffee, lunch]; // enough for a story: no Remember card below the minimum
 const none = async () => [];
 const NOW = new Date("2026-11-05T09:00:00Z");
 const ledger: Ledger = { today: "2026-11-05", payments: all, stopped: [], beliefs: none, chapters: none, corrections: none, actions: none, leftOut: none, lastRead: async () => null };
@@ -44,12 +45,12 @@ const picker = (...rounds: { text?: string; calls?: ToolCall[] }[]): AskTools =>
 const findSam = call("find_payments", { words: ["Sam"] });
 const sam = { kind: "support", belief: "You pay Sam your rent.", who: "Sam", from: "find_payments" };
 
-function memoryStore() {
+function memoryStore(payments = all) {
   const saved: Parameters<ChatStore["save"]>[1][] = [];
   const store: ChatStore = {
     history: none,
     askedSince: async () => 0,
-    payments: async () => all,
+    payments: async () => payments,
     beliefs: none,
     stopped: none,
     chapters: none,
@@ -69,6 +70,13 @@ const ask: AskJson = async (_, __, user) => {
 const deps = (pick: AskTools): Llm => ({ ask, pick, credit: async () => 10 });
 
 describe("a statement makes a Remember This? card (T-20.1)", () => {
+  it("makes none below the minimum, since there's no story to rewrite (T-10.6)", async () => {
+    const { store, saved } = memoryStore(rent);
+    const r = await answer(store, "The payments to Sam are my rent", deps(picker({ text: "final", calls: [findSam, call("remember", sam)] })), NOW);
+    expect(r).toMatchObject({ status: "answered", remember: null });
+    expect(saved[0].remember ?? null).toBeNull();
+  });
+
   it("carries the belief and its payments, saves no belief, and tells the writer it's only a proposal", async () => {
     const { store, saved } = memoryStore();
     const r = await answer(store, "The payments to Sam are my rent", deps(picker({ text: "final", calls: [findSam, call("remember", sam)] })), NOW);

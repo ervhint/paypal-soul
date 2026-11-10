@@ -70,12 +70,12 @@ export async function accountMinimum(db: SupabaseClient, accountId: string) {
   return minimumFound(pays as StoryPayment[]);
 }
 
-/** My Sandbox: only once one is connected with enough for a story (U10). Returns false otherwise. */
+/** My Sandbox: once one is connected, whatever it holds (U10). Returns false otherwise. */
 export async function chooseOwn(db: SupabaseClient) {
   const id = await userId(db);
   if (!id) return false;
   const own = await must(db.from("paypal_account").select("id").eq("kind", "own").neq("paypal_account_id", PENDING).limit(1));
-  if (!own.length || !(await accountMinimum(db, own[0].id)).ok) return false;
+  if (!own.length) return false;
   await must(db.from("person").update({ account_id: own[0].id }).eq("id", id));
   return true;
 }

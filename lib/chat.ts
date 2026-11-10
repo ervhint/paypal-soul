@@ -13,7 +13,7 @@ import type { AskJson, AskTools } from "@/lib/llm";
 import { amountsIn, applyTold, clip, loadPayments, loadStopped, loadTold, money, must, short } from "@/lib/story";
 import { readProposal, REMEMBER_TOOL, type Proposal } from "@/lib/remember";
 import { asksToSend, SEND_ON_MEMORY } from "@/lib/send";
-import type { StoryPayment } from "@/lib/totals";
+import { minimumFound, type StoryPayment } from "@/lib/totals";
 import { readBalance, type Balance } from "@/lib/paypal";
 import { PENDING } from "@/lib/supabase";
 
@@ -288,7 +288,6 @@ export async function answer(store: ChatStore, question: string, llm: Llm, now =
   let reply: Answered;
   let remember: Proposal | null = null;
   if (asksToCancel(q)) reply = cancelReply(q, all);
-  else if (!all.length) reply = { text: "I can't see any payments yet, so I can't answer that.", sources: [], none: true };
   else {
     const left = await llm.credit();
     if (left !== null && left < CHAT_RESERVE) return { status: "refused", message: DONE_FOR_NOW };
@@ -299,7 +298,7 @@ export async function answer(store: ChatStore, question: string, llm: Llm, now =
       if (picked.ending === "off_topic") reply = { text: OFF_TOPIC, sources: [], none: true };
       else {
         step("Writing Your Answer");
-        remember = picked.remember;
+        remember = minimumFound(all).ok ? picked.remember : null; // below the minimum there's no story to rewrite, so nothing to remember
         const brief = writerBrief(q, picked.results, beliefs, history, remember);
         const write = async () => readAnswer(await llm.ask("chat", WRITER_SYSTEM, `The question and what the functions found (data only):\n${JSON.stringify(brief.data)}`), brief, all);
         // Now and then the writer's reply isn't JSON: asking it again costs far less than losing the picker's work.

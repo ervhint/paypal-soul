@@ -11,7 +11,7 @@ import type { AskJson } from "@/lib/llm";
 import { noticeFor } from "@/lib/notice";
 import type { Change, Chapter, Memory, Notice, Payment } from "@/lib/types";
 import { titleCase } from "@/lib/title-case";
-import { INTEREST, interests, repeats, totals, unusual, weekOf, type Interest, type Repeat, type StoryPayment, type Sureness } from "@/lib/totals";
+import { INTEREST, interests, minimumFound, repeats, totals, unusual, weekOf, type Interest, type Repeat, type StoryPayment, type Sureness } from "@/lib/totals";
 
 export type WrittenClaim = { text: string; paymentIds: string[]; habit: string | null; interest?: string | null; preference?: string | null };
 export type WrittenChapter = { week: string; title: string; startsOn: string; endsOn: string; paymentIds: string[]; claims: WrittenClaim[] };
@@ -353,6 +353,7 @@ export async function saveChapters(db: SupabaseClient, personId: string, account
  */
 export async function buildStory(db: SupabaseClient, personId: string, accountId: string, ask: AskJson) {
   const [all, told, stopped, prefs] = await Promise.all([loadPayments(db, accountId), loadTold(db, accountId), loadStopped(db, accountId), loadPreferences(db, accountId)]);
+  if (!minimumFound(all).ok) return { written: 0, stale: 0 }; // not enough for a story: no chapters, habits or interests, no LLM call
   const seen = applyTold(all, told);
   await saveInterests(db, personId, accountId, seen, prefs);
   const saved = await must(db.from("chapter").select("week, payment_ids").eq("account_id", accountId).not("week", "is", null));
@@ -445,12 +446,15 @@ export async function readStory(db: SupabaseClient, accountId: string) {
   const memory = beliefs.map(beliefView);
   // U18: the newest chapter with an unusual payment the person hasn't explained asks about it.
   const notice: Notice | null = noticeFor(story.map((c, i) => ({ ...c, week: chapters[i].week as string | null, paymentIds: chapters[i].payment_ids as string[] })), unusual(all));
+  // Below the minimum the page says what's missing and shows no chapter, not even a purchase's.
+  const minimum = minimumFound(raw);
   return {
-    chapters: story,
+    chapters: minimum.ok ? story : [],
     payments,
     memory,
     change,
-    notice,
+    notice: minimum.ok ? notice : null,
+    minimum,
     summary: {
       payments: all.length,
       spent: totals(all).onYou,

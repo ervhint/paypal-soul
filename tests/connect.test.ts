@@ -8,6 +8,11 @@ import { sortRows } from "@/lib/import";
 import { PayPalError, type Consent, type PayPalTxn } from "@/lib/paypal";
 import { choosePrepared, chooseOwn, currentVisitor, PENDING, preparedAccountId, secretClient, sessionClient } from "@/lib/supabase";
 import { minimumFound, type StoryPayment } from "@/lib/totals";
+import { buildStory, readStory } from "@/lib/story";
+import { readMemory } from "@/lib/memory";
+import type { AskJson } from "@/lib/llm";
+
+const never: AskJson = async () => { throw new Error("no LLM call below the minimum"); };
 
 const pay = (day: number, name: string | null = "Morning coffee", amount = 4.5) =>
   ({ id: `p${day}${name}`, paypal_txn_id: `T${day}${name}`, occurred_at: `2026-11-${String(day).padStart(2, "0")}T08:00:00Z`, amount, currency: "USD", name, event_code: "T0002", category: "coffee" }) as StoryPayment;
@@ -129,15 +134,31 @@ describe("consent and Check Connection", () => {
     await startConsent(admin, p.id, "http://localhost:3000", consent);
     const read500 = async () => { throw new PayPalError(500, "down"); };
     expect(await checkConnection(admin, p.id, consent, read500)).toEqual({ state: "offline" });
-    expect(await checkConnection(admin, p.id, consent, readOk, async () => {})).toEqual({ state: "empty" });
+    expect(await checkConnection(admin, p.id, consent, readOk, async () => {})).toEqual({ state: "ready" });
   });
 
-  it("finds the account, imports it and says what's missing, keeping the prepared data (T-10.1, T-10.3)", async () => {
+  it("moves the person onto a sandbox with no payments, with no story, habit or LLM call (T-10.6)", async () => {
     const p = await enter();
-    const r = await connect(p, seed([1, 2, 3]));
-    expect(r).toEqual({ state: "little", found: { days: 3, payments: 3, repeats: 1 } });
-    expect(await currentVisitor(p.db())).toMatchObject({ source: "prepared", connected: true });
-    expect(await chooseOwn(p.db())).toBe(false);
+    expect(await connect(p, async () => {})).toEqual({ state: "ready" });
+    expect(await currentVisitor(p.db())).toMatchObject({ source: "own", connected: true });
+    const own = (await ownRow(p.id)).id;
+    expect(await buildStory(admin, p.id, own, never)).toEqual({ written: 0, stale: 0 });
+    const story = await readStory(p.db(), own);
+    expect(story).toMatchObject({ chapters: [], notice: null, minimum: { days: 0, payments: 0, repeats: 0, ok: false } });
+    expect((await readMemory(p.db(), own)).minimum).toMatchObject({ payments: 0, ok: false });
+  });
+
+  it("moves the person onto a sandbox below the minimum, and writes nothing until it's enough (T-10.1, T-10.3, T-10.6)", async () => {
+    const p = await enter();
+    expect(await connect(p, seed([1, 2, 3]))).toEqual({ state: "ready" });
+    expect(await currentVisitor(p.db())).toMatchObject({ source: "own", connected: true });
+    expect(await choosePrepared(p.db(), null)).toBe(p.id);
+    expect(await chooseOwn(p.db())).toBe(true); // the menu's My Sandbox works too
+    const own = (await ownRow(p.id)).id;
+    expect(await buildStory(admin, p.id, own, never)).toEqual({ written: 0, stale: 0 });
+    expect((await admin.from("belief").select("id").eq("account_id", own)).data).toEqual([]);
+    expect((await readStory(p.db(), own)).minimum).toEqual({ days: 3, payments: 3, repeats: 1, ok: false });
+    expect((await readMemory(p.db(), own)).minimum).toMatchObject({ payments: 3, ok: false });
     expect(await startConsent(admin, p.id, "http://localhost:3000", fakeConsent(null).consent)).toBeNull();
   });
 

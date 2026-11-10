@@ -3,15 +3,24 @@ import type { Result } from "@/lib/correct";
 import { askJson } from "@/lib/llm";
 import { editBelief, readMemory, setUsing } from "@/lib/memory";
 import { requestDb } from "@/lib/session";
-import { currentVisitor } from "@/lib/supabase";
+import { accountMinimum, currentVisitor } from "@/lib/supabase";
 
 const NO_DATA = { status: "error", message: "Choose the data to read first." };
+const TOO_LITTLE = { status: "error", message: "Memory starts once your sandbox has enough payments for a story." };
 
 /** The person and their data in use, or null before they chose any. */
 async function visitor() {
   const db = await requestDb();
   const v = await currentVisitor(db);
   return v?.accountId ? { db, personId: v.id, accountId: v.accountId } : null;
+}
+
+/** For a change: the visitor, or the reply that refuses it. Below the minimum there's nothing on Memory to change. */
+async function changer() {
+  const v = await visitor();
+  if (!v) return Response.json(NO_DATA, { status: 409 });
+  if (!(await accountMinimum(v.db, v.accountId)).ok) return Response.json(TOO_LITTLE, { status: 409 });
+  return v;
 }
 
 /** A change's reply: the error, Soul's question, or the whole memory as it is now. */
@@ -30,16 +39,16 @@ export async function GET() {
 // Tell Soul About You (U19): `text`, saved as a preference in the person's own words.
 export async function POST(req: Request) {
   const { text } = await req.json().catch(() => ({}));
-  const v = await visitor();
-  if (!v) return Response.json(NO_DATA, { status: 409 });
+  const v = await changer();
+  if (v instanceof Response) return v;
   return reply(await tellAbout(v.db, v.personId, v.accountId, text, askJson), v.db, v.accountId);
 }
 
 // Edit a belief (`text`, and `who` when answering Soul's question), or Stop Using This and Use Again (`active`).
 export async function PATCH(req: Request) {
   const { id, text, who, active } = await req.json().catch(() => ({}));
-  const v = await visitor();
-  if (!v) return Response.json(NO_DATA, { status: 409 });
+  const v = await changer();
+  if (v instanceof Response) return v;
   const r =
     typeof active === "boolean"
       ? await setUsing(v.db, v.personId, v.accountId, String(id ?? ""), active, askJson)
@@ -50,7 +59,7 @@ export async function PATCH(req: Request) {
 // Delete something the person told Soul about themselves (U19). Other beliefs are stopped, not deleted.
 export async function DELETE(req: Request) {
   const { id } = await req.json().catch(() => ({}));
-  const v = await visitor();
-  if (!v) return Response.json(NO_DATA, { status: 409 });
+  const v = await changer();
+  if (v instanceof Response) return v;
   return reply(await deletePreference(v.db, v.personId, v.accountId, String(id ?? ""), askJson), v.db, v.accountId);
 }
