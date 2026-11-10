@@ -61,7 +61,7 @@ const OCT = { from: "2026-10-01", to: "2026-10-31" };
 
 describe("the functions", () => {
   it("are 24, each described for the picker, with sum_fees cut", () => {
-    expect(TOOLS).toHaveLength(24);
+    expect(TOOLS).toHaveLength(25);
     expect(Object.keys(FUNCTIONS)).not.toContain("sum_fees");
     for (const t of TOOLS) expect(t.function.parameters.additionalProperties).toBe(false);
   });

@@ -21,9 +21,10 @@ const payments = [
   pay("2026-11-03", "Mobile data", 15, "bills.mobile_data"),
 ];
 const none = async () => [];
-const ledger: Ledger = { today: "2026-11-05", payments, stopped: [], beliefs: none, chapters: none, corrections: none, actions: none, leftOut: none, lastRead: async () => null };
+const ledger: Ledger = { today: "2026-11-05", payments, stopped: [], beliefs: none, chapters: none, corrections: none, actions: none, leftOut: none, lastRead: async () => null, balance: async () => ({ asOf: "2026-11-05T08:00:00Z", prepared: false, currencies: [{ currency: "USD", total: 5000, available: 5000, withheld: 0 }] }) };
 
 function score(x: Question, p: Picked) {
+  if (!x.fn?.includes("get_balance") && p.calls.some((c) => c.name === "get_balance")) return `read the balance, which wasn't asked for`;
   if (x.ending) return p.ending === x.ending && !p.calls.length ? null : `wanted ${x.ending}, got ${p.ending} ${p.calls.map((c) => c.name)}`;
   const call = p.calls.find((c) => x.fn!.includes(c.name));
   if (!call) return `wanted ${x.fn}, got ${p.ending} ${p.calls.map((c) => c.name)}`;

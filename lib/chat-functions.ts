@@ -4,6 +4,7 @@
 // (AC-16.6). Every sum and count is made here, never by an LLM (NF-8), and each figure remembers the payments
 // behind it, so the list under an answer is built by code (AC-16.7). `sum_fees` from the plan is cut: PayPal's
 // fee is kept only for orders made in Soul, where the receiver pays it, so Soul can't say what a person paid.
+import type { Balance } from "@/lib/paypal";
 import { CATEGORIES, categoryLabel, paymentName, UNKNOWN_PAYMENT } from "@/lib/categories";
 import { LEFT_OUT_LABELS, MONEY_IN } from "@/lib/import";
 import { clip, money, short } from "@/lib/story";
@@ -32,7 +33,15 @@ export type Ledger = {
   actions(): Promise<ChatAction[]>;
   leftOut(): Promise<ChatLeftOut[]>;
   lastRead(): Promise<string | null>;
+  /** PayPal's balance for the data source in use, asked each time and never saved (U22). Missing: none can be read. */
+  balance?(): Promise<Balance & { prepared: boolean }>;
 };
+
+/** PayPal didn't answer or refused the balance read: Soul says so, with no figure, and doesn't count the question. */
+export class BalanceUnavailable extends Error {}
+
+/** PayPal's time as Chat writes times: "Nov 9 at 14:59 UTC". */
+const atTime = (iso: string) => `${short(iso)} at ${new Date(iso).toISOString().slice(11, 16)} UTC`;
 
 /** One figure a function gave: an amount in cents or a count of payments, and the payments behind it. */
 export type Figure = { cents?: number; count?: number; ids: string[] };
@@ -565,6 +574,30 @@ export const FUNCTIONS: Record<string, Fn> = {
       const [read, left] = await Promise.all([l.lastRead(), l.leftOut()]);
       const days = l.payments.map((p) => dayOf(p.occurred_at));
       return { label: "what I can see", data: { payments: days.length, firstPayment: days[0] ? short(days[0]) : null, lastPayment: days.length ? short(days.at(-1)!) : null, lastReadPayPal: read ? short(read) : null, rowsLeftOut: left.length, readsBack: "up to 6 months" }, behind: [] };
+    },
+  },
+  get_balance: {
+    description: "The person's PayPal balance right now, as PayPal states it: total and available. A figure, never advice.",
+    params: {},
+    step: () => "Asking PayPal for Your Balance",
+    async run(_, l, f) {
+      let b: Awaited<ReturnType<NonNullable<Ledger["balance"]>>>;
+      try {
+        if (!l.balance) throw new Error("no balance reader");
+        b = await l.balance();
+      } catch (e) {
+        throw new BalanceUnavailable(String(e));
+      }
+      const figure = (n: number, c: string) => (c === "USD" ? f.of(n, []) : `${f.of(n, []).slice(1)} ${c}`);
+      const whose = b.prepared ? "the prepared sandbox account's PayPal balance, which every visitor on prepared data shares" : "your PayPal balance";
+      return {
+        label: `${whose}, as of ${atTime(b.asOf)}`,
+        data: {
+          asOf: atTime(b.asOf),
+          balances: b.currencies.map((c) => ({ currency: c.currency, total: figure(c.total, c.currency), available: figure(c.available, c.currency), ...(c.withheld > 0 ? { onHold: figure(c.withheld, c.currency) } : {}) })),
+        },
+        behind: [],
+      };
     },
   },
 };

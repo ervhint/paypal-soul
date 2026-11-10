@@ -8,6 +8,17 @@ const NOV: [string, string] = ["2026-11-01", "2026-11-30"];
 const LAST_WEEK: [string, string] = ["2026-10-26", "2026-11-01"];
 
 export const QUESTIONS: Question[] = [
+  // get_balance (U22, T-22.6): 6 balance questions, then 4 near misses that mustn't read it
+  { q: "What's my PayPal balance?", fn: ["get_balance"] },
+  { q: "How much money do I have?", fn: ["get_balance"] },
+  { q: "what's in my account right now", fn: ["get_balance"] },
+  { q: "How much is available in my PayPal?", fn: ["get_balance"] },
+  { q: "Is any of my balance on hold?", fn: ["get_balance"] },
+  { q: "balance?", fn: ["get_balance"] },
+  { q: "Can I afford a $300 phone?", ending: "no_data" },
+  { q: "How much did I spend this month?", fn: ["sum_spending"], dates: NOV },
+  { q: "How much money came in this month?", fn: ["money_in_out", "find_payments"] },
+  { q: "What should I do with my balance?", ending: "no_data" },
   // find_payments
   { q: "What was my biggest payment in October?", fn: ["find_payments", "rank_spending"], dates: OCT },
   { q: "When did I last pay for coffee?", fn: ["find_payments"], words: "coffee" },
@@ -92,7 +103,6 @@ export const QUESTIONS: Question[] = [
   // follow-up
   { q: "And in October?", fn: ["sum_spending"], dates: OCT, earlier: [{ question: "How much did I spend this month?", answer: "You spent $60.00 in November." }] },
   // No data for it
-  { q: "What's my PayPal balance?", ending: "no_data" },
   { q: "Am I over my budget?", ending: "no_data" },
   { q: "How much tax do I owe?", ending: "no_data" },
   { q: "Should I invest in Tesla?", ending: "no_data" },

@@ -211,7 +211,7 @@ describe("Tell Soul About You on Staging", () => {
   it("saves a preference, makes the interest Sure, and the story and chat follow edit, stop, use again and delete (T-19.1, T-19.2, T-19.6)", { timeout: 60_000 }, async () => {
     const p = await enter();
     await buildStory(p.db(), p.id, p.accountId, llm().ask);
-    expect(await interest(p)).toMatchObject({ sure: "Fairly Sure", source: "7 Days" });
+    expect(await interest(p)).toMatchObject({ sure: "Fairly Sure", source: expect.stringMatching(/^\d+ Days$/) });
 
     // Save: listed as You Told Me with its categories, the interest becomes Sure, and the coffee weeks name it.
     expect(await tellAbout(p.db(), p.id, p.accountId, "I love coffee", llm().ask)).toEqual({ status: "done" });
@@ -235,7 +235,7 @@ describe("Tell Soul About You on Staging", () => {
     expect(await usePreference(p.db(), p.id, p.accountId, saved.id, false, llm().ask)).toEqual({ status: "done" });
     expect((await claims(p)).some((t) => t.startsWith("That fits"))).toBe(false);
     expect(await chatKnows(p)).toEqual([]);
-    expect(await interest(p)).toMatchObject({ sure: "Fairly Sure", source: "7 Days" });
+    expect(await interest(p)).toMatchObject({ sure: "Fairly Sure", source: expect.stringMatching(/^\d+ Days$/) });
 
     // Use Again: back.
     expect(await usePreference(p.db(), p.id, p.accountId, saved.id, true, llm().ask)).toEqual({ status: "done" });

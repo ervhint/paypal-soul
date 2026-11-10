@@ -51,13 +51,15 @@ const platformToken = () => token(process.env.PAYPAL_PLATFORM_CLIENT_ID!, proces
 const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const iso = (d: Date) => `${d.toISOString().slice(0, 19)}Z`;
 
+/** The Platform app's headers for reading on behalf of an account that gave consent. */
+const onBehalfOf = async (payerId: string) => ({
+  Authorization: `Bearer ${await platformToken()}`,
+  "PayPal-Auth-Assertion": `${b64({ alg: "none" })}.${b64({ iss: process.env.PAYPAL_PLATFORM_CLIENT_ID!, payer_id: payerId })}.`,
+});
+
 /** Reads one window (31 days or less) of an account's rows, all pages. */
 export async function readTransactions(payerId: string, start: Date, end: Date): Promise<Page> {
-  const id = process.env.PAYPAL_PLATFORM_CLIENT_ID!;
-  const headers = {
-    Authorization: `Bearer ${await platformToken()}`,
-    "PayPal-Auth-Assertion": `${b64({ alg: "none" })}.${b64({ iss: id, payer_id: payerId })}.`,
-  };
+  const headers = await onBehalfOf(payerId);
   const rows: PayPalTxn[] = [];
   let lastRefreshed = iso(end);
   for (let page = 1, pages = 1; page <= pages; page++) {
@@ -70,6 +72,23 @@ export async function readTransactions(payerId: string, start: Date, end: Date):
     if (j.last_refreshed_datetime) lastRefreshed = j.last_refreshed_datetime;
   }
   return { rows, lastRefreshed };
+}
+
+/** An account's balance as PayPal states it (U22): per currency, and the time PayPal's figure is from. */
+export type Balance = { asOf: string; currencies: { currency: string; total: number; available: number; withheld: number }[] };
+
+const amount = (m?: { value?: string }) => Number(m?.value ?? 0);
+
+/** Asks PayPal for an account's balance. Nothing is saved: each call is PayPal's latest figure. */
+export async function readBalance(payerId: string): Promise<Balance> {
+  const r = await fetch(`${base}/v1/reporting/balances`, { headers: await onBehalfOf(payerId), cache: "no-store" });
+  if (!r.ok) throw new PayPalError(r.status, `PayPal balance read returned ${r.status}`);
+  type Money = { value?: string };
+  const j = (await r.json()) as { as_of_time?: string; last_refresh_time?: string; balances?: { currency: string; total_balance?: Money; available_balance?: Money; withheld_balance?: Money }[] };
+  return {
+    asOf: j.as_of_time ?? j.last_refresh_time ?? new Date().toISOString(),
+    currencies: (j.balances ?? []).map((b) => ({ currency: b.currency, total: amount(b.total_balance), available: amount(b.available_balance), withheld: amount(b.withheld_balance) })),
+  };
 }
 
 /** Consent through the Platform app (U10): a link to PayPal's page, and what PayPal says came of it. */
