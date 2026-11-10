@@ -123,7 +123,9 @@ function StoryView() {
         <p className="note">Sandbox payments keep their real dates, so history can&rsquo;t be backdated. You can still ask Chat about these payments and your balance.</p>
       </div>
     );
-  if (demo === "empty" || (data?.minimum && !data.minimum.payments) || (data && data.payments.length === 0))
+  // A brand-new account has no payments until its first sync finishes, so it reads as loading, not empty.
+  const firstRead = state === "syncing" && !!data && data.payments.length === 0;
+  if (!firstRead && (demo === "empty" || (data?.minimum && !data.minimum.payments) || (data && data.payments.length === 0)))
     return (
       <div className="wrap">
         <Empty icon="receipt" title="No Payments to Read Yet">
@@ -132,7 +134,7 @@ function StoryView() {
         </Empty>
       </div>
     );
-  if (!data)
+  if (!data || firstRead)
     return (
       <div className="wrap story-skel" role="status" aria-label="Reading your sandbox payments">
         <div>
