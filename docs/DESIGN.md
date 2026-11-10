@@ -37,7 +37,7 @@ Only a Copilot Money marketing mockup was seen as a screen. ChatGPT is from help
 - [Perplexity](https://www.perplexity.ai/hub/blog/introducing-perplexity-deep-research): adapt one-line labels for chat actions (US-16), a small point.
 
 ## Chosen direction (G3)
-Sample 01, with Bubbledot and a strong dark fade over the video (added for headline contrast, not in the reference). Bubbledot's license is unconfirmed and it loads from OnlineWebFonts: check before shipping, with Geist Pixel as the fallback.
+Sample 01, with Bubbledot and a strong dark fade over the video (added for headline contrast, not in the reference). Bubbledot loads from OnlineWebFonts and is covered by the motionsites.ai free plan (confirmed by the user, Nov 10), with Geist Pixel as the fallback.
 
 ## Sample notes (G3)
 Payment numbers in the samples are illustrative, not real sandbox values.
