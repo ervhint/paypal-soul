@@ -4,7 +4,7 @@ Your money has a story.
 
 PayPal gives you a list of payments. That list tells you what happened, but not what it meant. You can't easily see your habits, who you've been helping out, or what changed this month. Soul reads your PayPal sandbox payments and writes them up as a short story, one chapter per week. It remembers what you tell it, and when it gets something wrong, you can correct it and it rewrites the chapter.
 
-I built this for the PayPal AI Hackathon. It runs on the PayPal sandbox only, so every account and every dollar in it is fake.
+I built this for the PayPal AI Hackathon. It runs on the PayPal sandbox only, so every account and every dollar in it is fake. Using it with real accounts would need PayPal to approve the app for production access.
 
 **Live:** https://paypal-soul.vercel.app
 
